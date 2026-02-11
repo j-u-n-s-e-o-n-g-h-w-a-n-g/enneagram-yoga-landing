@@ -1,17 +1,16 @@
 <svg width="500" height="500" viewBox="0 0 500 500" xmlns="http://www.w3.org/2000/svg">
   <style>
-    /* 기본 배경 및 폰트 설정 */
+    /* 기본 배경 */
     .background { fill: #ffffff; }
-    .label-text { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: bold; font-size: 24px; text-anchor: middle; dominant-baseline: central; fill: #333; }
 
-    /* 선과 점의 스타일 컨셉 정의 */
-    /* 원형 (Circle): 안정적인 짙은 회색 */
+    /* 선과 점의 스타일 정의 (이전 컨셉 유지) */
+    /* 원형 (Circle) */
     .enneagram-circle {
       fill: none;
       stroke: #455A64; /* 챠콜 그레이 */
       stroke-width: 8;
     }
-    /* 삼각형 (Triangle 9-3-6): 균형을 상징하는 파란색 */
+    /* 삼각형 (Triangle 9-3-6) */
     .enneagram-triangle {
       fill: none;
       stroke: #0288D1; /* 밝은 파랑 */
@@ -19,16 +18,15 @@
       stroke-linecap: round;
       stroke-linejoin: round;
     }
-    /* 헥사드 (Hexad 1-4-2-8-5-7): 변화와 흐름을 상징하는 주황색 */
+    /* 헥사드 (Hexad 1-4-2-8-5-7) */
     .enneagram-hexad {
       fill: none;
       stroke: #F57C00; /* 진한 주황 */
       stroke-width: 6;
       stroke-linecap: round;
       stroke-linejoin: round;
-      stroke-dasharray: 1, 0; /* 실선 */
     }
-    /* 9개의 점 (Points): 교차점을 강조하는 스타일 */
+    /* 9개의 점 (Points) */
     .enneagram-point {
       fill: #ffffff; /* 내부 흰색 */
       stroke: #455A64; /* 테두리는 원과 같은 색 */
@@ -49,31 +47,9 @@
 
     <g class="points-group">
       <circle cx="0" cy="-220" class="enneagram-point" />
-      <text x="0" y="-255" class="label-text">9</text>
       
       <circle cx="141.4" cy="-169.9" class="enneagram-point" />
-      <text x="165" y="-195" class="label-text">1</text>
       
       <circle cx="216.5" cy="-38.2" class="enneagram-point" />
-      <text x="250" y="-45" class="label-text">2</text>
 
-      <circle cx="190.5" cy="110" class="enneagram-point" />
-      <text x="220" y="130" class="label-text">3</text>
-
-      <circle cx="75.2" cy="206.7" class="enneagram-point" />
-      <text x="85" y="245" class="label-text">4</text>
-
-      <circle cx="-75.2" cy="206.7" class="enneagram-point" />
-      <text x="-85" y="245" class="label-text">5</text>
-
-      <circle cx="-190.5" cy="110" class="enneagram-point" />
-      <text x="-220" y="130" class="label-text">6</text>
-
-      <circle cx="-216.5" cy="-38.2" class="enneagram-point" />
-      <text x="-250" y="-45" class="label-text">7</text>
-
-      <circle cx="-141.4" cy="-169.9" class="enneagram-point" />
-      <text x="-165" y="-195" class="label-text">8</text>
-    </g>
-  </g>
-</svg>
+      <circle cx="1
