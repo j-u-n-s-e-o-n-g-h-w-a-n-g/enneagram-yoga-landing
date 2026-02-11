@@ -2,7 +2,7 @@ const express = require('express');
 const path = require('path');
 const session = require('express-session');
 const bcrypt = require('bcryptjs');
-const { pool, initDB, isDBReady, getDbUrl } = require('./db');
+const { getPool, initDB, isDBReady, getDbUrl } = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -11,7 +11,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Session setup — use PG store if DB is available, otherwise memory
+// Session setup
 function setupSession() {
   const sessionConfig = {
     secret: process.env.SESSION_SECRET || 'enneagram-yoga-secret-key-change-in-production',
@@ -20,6 +20,7 @@ function setupSession() {
     cookie: { maxAge: 30 * 24 * 60 * 60 * 1000, secure: false }
   };
 
+  const pool = getPool();
   if (pool) {
     try {
       const pgSession = require('connect-pg-simple')(session);
@@ -35,9 +36,9 @@ function setupSession() {
   app.use(session(sessionConfig));
 }
 
-// DB check middleware
+// Middleware
 function requireDB(req, res, next) {
-  if (!isDBReady()) return res.status(503).json({ error: '데이터베이스가 연결되지 않았습니다. 관리자에게 문의하세요.' });
+  if (!isDBReady()) return res.status(503).json({ error: '데이터베이스가 연결되지 않았습니다.' });
   next();
 }
 function requireAuth(req, res, next) {
@@ -53,6 +54,7 @@ function requireAdmin(req, res, next) {
 // ===================== AUTH API =====================
 
 app.post('/api/register', requireDB, async (req, res) => {
+  const pool = getPool();
   try {
     const { name, email, phone, password } = req.body;
     if (!name || !email || !phone || !password) return res.status(400).json({ error: '모든 필드를 입력해주세요' });
@@ -71,11 +73,12 @@ app.post('/api/register', requireDB, async (req, res) => {
     res.json({ success: true, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
   } catch (err) {
     console.error('Register error:', err);
-    res.status(500).json({ error: '서버 오류가 발생했습니다' });
+    res.status(500).json({ error: '서버 오류가 발생했습니다', detail: err.message });
   }
 });
 
 app.post('/api/login', requireDB, async (req, res) => {
+  const pool = getPool();
   try {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: '이메일과 비밀번호를 입력해주세요' });
@@ -90,7 +93,7 @@ app.post('/api/login', requireDB, async (req, res) => {
     res.json({ success: true, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
   } catch (err) {
     console.error('Login error:', err);
-    res.status(500).json({ error: '서버 오류가 발생했습니다' });
+    res.status(500).json({ error: '서버 오류가 발생했습니다', detail: err.message });
   }
 });
 
@@ -110,18 +113,13 @@ app.get('/api/me', (req, res) => {
 // ===================== MEMBER API =====================
 
 app.get('/api/mypage', requireDB, requireAuth, async (req, res) => {
+  const pool = getPool();
   try {
     const userId = req.session.userId;
     const userResult = await pool.query('SELECT id, name, email, phone, created_at FROM users WHERE id = $1', [userId]);
-    const passResult = await pool.query(
-      'SELECT * FROM class_passes WHERE user_id = $1 ORDER BY purchased_at DESC', [userId]
-    );
-    const paymentResult = await pool.query(
-      'SELECT * FROM payments WHERE user_id = $1 ORDER BY created_at DESC', [userId]
-    );
-    const attendanceResult = await pool.query(
-      'SELECT * FROM attendance WHERE user_id = $1 ORDER BY attended_at DESC LIMIT 20', [userId]
-    );
+    const passResult = await pool.query('SELECT * FROM class_passes WHERE user_id = $1 ORDER BY purchased_at DESC', [userId]);
+    const paymentResult = await pool.query('SELECT * FROM payments WHERE user_id = $1 ORDER BY created_at DESC', [userId]);
+    const attendanceResult = await pool.query('SELECT * FROM attendance WHERE user_id = $1 ORDER BY attended_at DESC LIMIT 20', [userId]);
     res.json({
       user: userResult.rows[0],
       passes: passResult.rows,
@@ -130,11 +128,12 @@ app.get('/api/mypage', requireDB, requireAuth, async (req, res) => {
     });
   } catch (err) {
     console.error('Mypage error:', err);
-    res.status(500).json({ error: '서버 오류' });
+    res.status(500).json({ error: '서버 오류', detail: err.message });
   }
 });
 
 app.post('/api/passes/request', requireDB, requireAuth, async (req, res) => {
+  const pool = getPool();
   try {
     const userId = req.session.userId;
     const depositorName = req.body.depositor_name || req.session.userName;
@@ -145,13 +144,14 @@ app.post('/api/passes/request', requireDB, requireAuth, async (req, res) => {
     res.json({ success: true, payment: paymentResult.rows[0] });
   } catch (err) {
     console.error('Pass request error:', err);
-    res.status(500).json({ error: '서버 오류' });
+    res.status(500).json({ error: '서버 오류', detail: err.message });
   }
 });
 
 // ===================== ADMIN API =====================
 
 app.get('/api/admin/members', requireDB, requireAdmin, async (req, res) => {
+  const pool = getPool();
   try {
     const result = await pool.query(`
       SELECT u.id, u.name, u.email, u.phone, u.created_at,
@@ -162,32 +162,28 @@ app.get('/api/admin/members', requireDB, requireAdmin, async (req, res) => {
     res.json({ members: result.rows });
   } catch (err) {
     console.error('Admin members error:', err);
-    res.status(500).json({ error: '서버 오류' });
+    res.status(500).json({ error: '서버 오류', detail: err.message });
   }
 });
 
 app.get('/api/admin/payments', requireDB, requireAdmin, async (req, res) => {
+  const pool = getPool();
   try {
     const status = req.query.status || 'all';
-    let query = `
-      SELECT p.*, u.name as user_name, u.email as user_email, u.phone as user_phone
-      FROM payments p JOIN users u ON p.user_id = u.id
-    `;
+    let query = `SELECT p.*, u.name as user_name, u.email as user_email, u.phone as user_phone FROM payments p JOIN users u ON p.user_id = u.id`;
     const params = [];
-    if (status !== 'all') {
-      query += ' WHERE p.status = $1';
-      params.push(status);
-    }
+    if (status !== 'all') { query += ' WHERE p.status = $1'; params.push(status); }
     query += ' ORDER BY p.created_at DESC';
     const result = await pool.query(query, params);
     res.json({ payments: result.rows });
   } catch (err) {
     console.error('Admin payments error:', err);
-    res.status(500).json({ error: '서버 오류' });
+    res.status(500).json({ error: '서버 오류', detail: err.message });
   }
 });
 
 app.post('/api/admin/payments/:id/confirm', requireDB, requireAdmin, async (req, res) => {
+  const pool = getPool();
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -208,13 +204,14 @@ app.post('/api/admin/payments/:id/confirm', requireDB, requireAdmin, async (req,
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('Confirm payment error:', err);
-    res.status(500).json({ error: '서버 오류' });
+    res.status(500).json({ error: '서버 오류', detail: err.message });
   } finally {
     client.release();
   }
 });
 
 app.post('/api/admin/members/:id/attend', requireDB, requireAdmin, async (req, res) => {
+  const pool = getPool();
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -238,13 +235,14 @@ app.post('/api/admin/members/:id/attend', requireDB, requireAdmin, async (req, r
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('Attend error:', err);
-    res.status(500).json({ error: '서버 오류' });
+    res.status(500).json({ error: '서버 오류', detail: err.message });
   } finally {
     client.release();
   }
 });
 
 app.get('/api/admin/stats', requireDB, requireAdmin, async (req, res) => {
+  const pool = getPool();
   try {
     const totalMembers = await pool.query("SELECT COUNT(*) FROM users WHERE role = 'member'");
     const pendingPayments = await pool.query("SELECT COUNT(*) FROM payments WHERE status = 'pending'");
@@ -258,7 +256,7 @@ app.get('/api/admin/stats', requireDB, requireAdmin, async (req, res) => {
     });
   } catch (err) {
     console.error('Stats error:', err);
-    res.status(500).json({ error: '서버 오류' });
+    res.status(500).json({ error: '서버 오류', detail: err.message });
   }
 });
 
@@ -272,6 +270,7 @@ app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'adm
 
 // Health check
 app.get('/api/health', (req, res) => {
+  const pool = getPool();
   const dbUrl = getDbUrl();
   res.json({
     status: 'ok',
@@ -279,9 +278,6 @@ app.get('/api/health', (req, res) => {
     hasDbUrl: !!dbUrl,
     dbUrlPrefix: dbUrl ? dbUrl.substring(0, 20) + '...' : 'not set',
     poolExists: pool !== null,
-    dbRelatedEnvKeys: Object.keys(process.env).filter(k =>
-      k.includes('DATABASE') || k.includes('PG') || k.includes('POSTGRES') || k.includes('DB')
-    ),
     timestamp: new Date().toISOString()
   });
 });
@@ -298,7 +294,6 @@ async function start() {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ Server running on port ${PORT}`);
     console.log(`   Database: ${isDBReady() ? 'Connected' : 'Not connected'}`);
-    console.log(`   DB URL: ${getDbUrl() ? 'found' : 'NOT SET'}`);
   });
 }
 start();

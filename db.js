@@ -24,7 +24,7 @@ if (DB_URL) {
     console.error('Unexpected pool error:', err);
   });
 } else {
-  console.warn('⚠️  No database URL found. Checked: DATABASE_URL, DATABASE_PUBLIC_URL, DATABASE_PRIVATE_URL, POSTGRES_URL, POSTGRES_PUBLIC_URL, POSTGRES_PRIVATE_URL');
+  console.warn('⚠️  No database URL found.');
   console.warn('⚠️  Running without database (landing page only).');
 }
 
@@ -102,6 +102,10 @@ async function initDB() {
   }
 }
 
+function getPool() {
+  return pool;
+}
+
 function isDBReady() {
   return dbReady && pool !== null;
 }
@@ -110,4 +114,4 @@ function getDbUrl() {
   return DB_URL;
 }
 
-module.exports = { pool, initDB, isDBReady, getDbUrl };
+module.exports = { getPool, initDB, isDBReady, getDbUrl };
