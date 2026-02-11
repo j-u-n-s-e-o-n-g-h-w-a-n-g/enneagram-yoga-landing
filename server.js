@@ -279,7 +279,7 @@ app.get('/api/health', (req, res) => {
     hasDbUrl: !!dbUrl,
     dbUrlPrefix: dbUrl ? dbUrl.substring(0, 15) + '...' : 'not set',
     poolExists: pool !== null,
-    envKeys: Object.keys(process.env).filter(k => k.includes('DATABASE') || k.includes('PG') || k.includes('POSTGRES')),
+    allEnvKeys: Object.keys(process.env).sort(),
     timestamp: new Date().toISOString()
   });
 });
@@ -297,6 +297,7 @@ async function start() {
     console.log(`✅ Server running on port ${PORT}`);
     console.log(`   Database: ${isDBReady() ? 'Connected' : 'Not connected'}`);
     console.log(`   DATABASE_URL: ${process.env.DATABASE_URL ? 'set' : 'NOT SET'}`);
+    console.log(`   All env keys: ${Object.keys(process.env).sort().join(', ')}`);
   });
 }
 start();
