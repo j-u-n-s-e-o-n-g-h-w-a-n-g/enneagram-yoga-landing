@@ -52,4 +52,17 @@
       
       <circle cx="216.5" cy="-38.2" class="enneagram-point" />
 
-      <circle cx="1
+      <circle cx="190.5" cy="110" class="enneagram-point" />
+
+      <circle cx="75.2" cy="206.7" class="enneagram-point" />
+
+      <circle cx="-75.2" cy="206.7" class="enneagram-point" />
+
+      <circle cx="-190.5" cy="110" class="enneagram-point" />
+
+      <circle cx="-216.5" cy="-38.2" class="enneagram-point" />
+
+      <circle cx="-141.4" cy="-169.9" class="enneagram-point" />
+    </g>
+  </g>
+</svg>
