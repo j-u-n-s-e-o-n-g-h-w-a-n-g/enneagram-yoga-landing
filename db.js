@@ -1,13 +1,30 @@
 const { Pool } = require('pg');
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-});
+let pool = null;
+let dbReady = false;
+
+if (process.env.DATABASE_URL) {
+  pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  });
+
+  pool.on('error', (err) => {
+    console.error('Unexpected pool error:', err);
+  });
+} else {
+  console.warn('⚠️  DATABASE_URL not set. Running without database (landing page only).');
+}
 
 async function initDB() {
-  const client = await pool.connect();
+  if (!pool) {
+    console.log('⚠️  Skipping DB init — no DATABASE_URL configured.');
+    return;
+  }
+
+  let client;
   try {
+    client = await pool.connect();
     await client.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -52,7 +69,6 @@ async function initDB() {
         note VARCHAR(255)
       );
     `);
-    // Create session table for connect-pg-simple
     await client.query(`
       CREATE TABLE IF NOT EXISTS session (
         sid VARCHAR NOT NULL COLLATE "default",
@@ -60,14 +76,22 @@ async function initDB() {
         expire TIMESTAMP(6) NOT NULL,
         CONSTRAINT session_pkey PRIMARY KEY (sid)
       );
+    `);
+    await client.query(`
       CREATE INDEX IF NOT EXISTS idx_session_expire ON session (expire);
     `);
-    console.log('Database tables initialized successfully');
+    dbReady = true;
+    console.log('✅ Database tables initialized successfully');
   } catch (err) {
-    console.error('Database initialization error:', err);
+    console.error('❌ Database initialization error:', err.message);
+    console.log('⚠️  Server will run without database features.');
   } finally {
-    client.release();
+    if (client) client.release();
   }
 }
 
-module.exports = { pool, initDB };
+function isDBReady() {
+  return dbReady && pool !== null;
+}
+
+module.exports = { pool, initDB, isDBReady };
