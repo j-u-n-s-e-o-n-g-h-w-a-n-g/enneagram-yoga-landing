@@ -1,46 +1,65 @@
-<svg width="600" height="600" viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg">
+<svg width="500" height="500" viewBox="0 0 500 500" xmlns="http://www.w3.org/2000/svg">
   <style>
-    .background {
-      fill: #f0eadd;
-    }
-    .outer-circle {
+    /* 배경 색상 */
+    .background { fill: #f8f6f3; }
+
+    /* 메인 구조 라인 스타일 (원형, 헥사드) - 골드 색상 */
+    .main-structure {
       fill: none;
-      stroke: #3e3a35;
-      stroke-width: 4;
-    }
-    .inner-circle {
-      fill: none;
-      stroke: #3e3a35;
-      stroke-width: 2;
-    }
-    /* 삼각형과 헥사드 모두 이 스타일을 공유합니다. */
-    .gold-line {
-      fill: none;
-      stroke: #c1a35f;
-      stroke-width: 3;
+      stroke: #8a7968; /* 뮤트 골드 */
+      stroke-width: 5;
       stroke-linecap: round;
       stroke-linejoin: round;
     }
+
+    /* 악센트 구조 라인 스타일 (삼각형) - 골드 색상 */
+    /* 삼각형을 골드로 처리하여 시각적 중심을 잡음 */
+    .accent-structure {
+      fill: none;
+      stroke: #8a7968; /* 뮤트 골드 */
+      stroke-width: 5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    /* 9개의 점 스타일 */
+    /* 골드로 채우고 얇은 어두운 테두리를 주어 보석 같은 느낌 */
     .enneagram-point {
-      fill: #c1a35f;
-      stroke: #3e3a35;
+      fill: #8a7968; /* 골드 채우기 */
+      stroke: #2c2c2c; /* 어두운 테두리 */
       stroke-width: 2;
+      r: 11; /* 점의 반지름 */
     }
   </style>
 
-  <rect width="600" height="600" class="background"/>
+  <rect width="500" height="500" class="background" />
 
-  <g transform="translate(300, 300)">
+  <g transform="translate(250, 250)">
     
-    <circle r="250" class="outer-circle"/>
-    <circle r="240" class="inner-circle"/>
+    <circle cx="0" cy="0" r="220" class="main-structure" />
 
-    <path d="M 0,-240 L 207.85,120 L -207.85,120 Z" class="gold-line"/>
+    <path d="M 0,-220 L 190.5,110 L -190.5,110 Z" class="accent-structure" />
 
-    <path d="M 154.25,-183.85 L 82.08,225.53 L 236.19,-41.68 L -154.25,-183.85 L -82.08,225.53 L -236.19,-41.68 Z" class="gold-line"/>
+    <path d="M 141.4,-169.9 L 75.2,206.7 L 216.5,-38.2 L -141.4,-169.9 L -75.2,206.7 L -216.5,-38.2 Z" class="main-structure" />
 
-    <g>
-      <circle cx="0" cy="-240" r="15" class="enneagram-point"/>      <circle cx="154.25" cy="-183.85" r="15" class="enneagram-point"/> <circle cx="236.19" cy="-41.68" r="15" class="enneagram-point"/>  <circle cx="207.85" cy="120" r="15" class="enneagram-point"/>    <circle cx="82.08" cy="225.53" r="15" class="enneagram-point"/>   <circle cx="-82.08" cy="225.53" r="15" class="enneagram-point"/>  <circle cx="-207.85" cy="120" r="15" class="enneagram-point"/>   <circle cx="-236.19" cy="-41.68" r="15" class="enneagram-point"/> <circle cx="-154.25" cy="-183.85" r="15" class="enneagram-point"/></g>
+    <g class="points-group">
+      <circle cx="0" cy="-220" class="enneagram-point" />
+      
+      <circle cx="141.4" cy="-169.9" class="enneagram-point" />
+      
+      <circle cx="216.5" cy="-38.2" class="enneagram-point" />
 
+      <circle cx="190.5" cy="110" class="enneagram-point" />
+
+      <circle cx="75.2" cy="206.7" class="enneagram-point" />
+
+      <circle cx="-75.2" cy="206.7" class="enneagram-point" />
+
+      <circle cx="-190.5" cy="110" class="enneagram-point" />
+
+      <circle cx="-216.5" cy="-38.2" class="enneagram-point" />
+
+      <circle cx="-141.4" cy="-169.9" class="enneagram-point" />
+    </g>
   </g>
 </svg>
