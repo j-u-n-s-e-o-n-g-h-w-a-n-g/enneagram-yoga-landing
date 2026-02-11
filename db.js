@@ -3,22 +3,34 @@ const { Pool } = require('pg');
 let pool = null;
 let dbReady = false;
 
-if (process.env.DATABASE_URL) {
+// Try multiple possible env var names for the database URL
+const DB_URL = process.env.DATABASE_URL
+  || process.env.DATABASE_PUBLIC_URL
+  || process.env.DATABASE_PRIVATE_URL
+  || process.env.POSTGRES_URL
+  || process.env.POSTGRES_PUBLIC_URL
+  || process.env.POSTGRES_PRIVATE_URL
+  || process.env.PGDATABASE_URL
+  || null;
+
+if (DB_URL) {
+  console.log('🔗 Found database URL, connecting...');
   pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+    connectionString: DB_URL,
+    ssl: { rejectUnauthorized: false }
   });
 
   pool.on('error', (err) => {
     console.error('Unexpected pool error:', err);
   });
 } else {
-  console.warn('⚠️  DATABASE_URL not set. Running without database (landing page only).');
+  console.warn('⚠️  No database URL found. Checked: DATABASE_URL, DATABASE_PUBLIC_URL, DATABASE_PRIVATE_URL, POSTGRES_URL, POSTGRES_PUBLIC_URL, POSTGRES_PRIVATE_URL');
+  console.warn('⚠️  Running without database (landing page only).');
 }
 
 async function initDB() {
   if (!pool) {
-    console.log('⚠️  Skipping DB init — no DATABASE_URL configured.');
+    console.log('⚠️  Skipping DB init — no database URL configured.');
     return;
   }
 
@@ -94,4 +106,8 @@ function isDBReady() {
   return dbReady && pool !== null;
 }
 
-module.exports = { pool, initDB, isDBReady };
+function getDbUrl() {
+  return DB_URL;
+}
+
+module.exports = { pool, initDB, isDBReady, getDbUrl };
