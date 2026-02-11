@@ -2,7 +2,7 @@ const express = require('express');
 const path = require('path');
 const session = require('express-session');
 const bcrypt = require('bcryptjs');
-const { pool, initDB, isDBReady } = require('./db');
+const { pool, initDB, isDBReady, getDbUrl } = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -29,7 +29,7 @@ function setupSession() {
       console.warn('⚠️  PG session store failed, using memory store:', err.message);
     }
   } else {
-    console.log('⚠️  Session store: Memory (no DATABASE_URL)');
+    console.log('⚠️  Session store: Memory (no database URL)');
   }
 
   app.use(session(sessionConfig));
@@ -270,16 +270,18 @@ app.get('/register', (req, res) => res.sendFile(path.join(__dirname, 'public', '
 app.get('/mypage', (req, res) => res.sendFile(path.join(__dirname, 'public', 'mypage.html')));
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 
-// Health check with debug info
+// Health check
 app.get('/api/health', (req, res) => {
-  const dbUrl = process.env.DATABASE_URL;
+  const dbUrl = getDbUrl();
   res.json({
     status: 'ok',
     db: isDBReady(),
     hasDbUrl: !!dbUrl,
-    dbUrlPrefix: dbUrl ? dbUrl.substring(0, 15) + '...' : 'not set',
+    dbUrlPrefix: dbUrl ? dbUrl.substring(0, 20) + '...' : 'not set',
     poolExists: pool !== null,
-    allEnvKeys: Object.keys(process.env).sort(),
+    dbRelatedEnvKeys: Object.keys(process.env).filter(k =>
+      k.includes('DATABASE') || k.includes('PG') || k.includes('POSTGRES') || k.includes('DB')
+    ),
     timestamp: new Date().toISOString()
   });
 });
@@ -296,8 +298,7 @@ async function start() {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ Server running on port ${PORT}`);
     console.log(`   Database: ${isDBReady() ? 'Connected' : 'Not connected'}`);
-    console.log(`   DATABASE_URL: ${process.env.DATABASE_URL ? 'set' : 'NOT SET'}`);
-    console.log(`   All env keys: ${Object.keys(process.env).sort().join(', ')}`);
+    console.log(`   DB URL: ${getDbUrl() ? 'found' : 'NOT SET'}`);
   });
 }
 start();
