@@ -24,6 +24,21 @@ nav ul li a:hover{color:var(--accent)}
 .page-header .label{font-family:'Cormorant Garamond',serif;font-size:0.75rem;letter-spacing:0.35em;text-transform:uppercase;color:var(--accent);margin-bottom:8px}
 .page-header h1{font-family:'Cormorant Garamond',serif;font-size:2.5rem;font-weight:300;letter-spacing:0.03em}
 .page-header .welcome{font-size:0.85rem;color:#888;font-weight:300;margin-top:8px}
+.temp-pw-banner{background:#fff8e1;border:1px solid #eed88a;padding:20px 24px;margin-bottom:30px;font-size:0.82rem;font-weight:300;line-height:1.8;display:none}
+.temp-pw-banner strong{font-weight:500;color:#c49000}
+.temp-pw-banner .change-pw-toggle{display:inline-block;margin-top:8px;padding:8px 24px;border:1px solid #c49000;background:transparent;color:#c49000;font-family:'Cormorant Garamond',serif;font-size:0.78rem;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;transition:all 0.3s}
+.temp-pw-banner .change-pw-toggle:hover{background:#c49000;color:var(--white)}
+.pw-change-form{background:var(--white);border:1px solid var(--border);padding:30px;margin-bottom:30px;display:none}
+.pw-change-form h3{font-family:'Cormorant Garamond',serif;font-size:1.2rem;font-weight:300;margin-bottom:20px}
+.pw-change-form .form-group{margin-bottom:18px}
+.pw-change-form .form-group label{display:block;font-size:0.7rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--accent);margin-bottom:6px;font-family:'Cormorant Garamond',serif}
+.pw-change-form .form-group input{width:100%;padding:10px 0;border:none;border-bottom:1px solid var(--border);background:transparent;font-family:'Noto Serif KR',serif;font-size:0.85rem;font-weight:300;outline:none}
+.pw-change-form .form-group input:focus{border-bottom-color:var(--accent)}
+.pw-change-form .pw-btn{padding:10px 30px;border:1px solid var(--text);background:transparent;color:var(--text);font-family:'Cormorant Garamond',serif;font-size:0.78rem;letter-spacing:0.12em;text-transform:uppercase;cursor:pointer;transition:all 0.3s}
+.pw-change-form .pw-btn:hover{background:var(--text);color:var(--white)}
+.pw-change-form .pw-msg{font-size:0.78rem;margin-top:12px;font-weight:300}
+.pw-change-form .pw-msg.success{color:#2e7d32}
+.pw-change-form .pw-msg.error{color:#c44}
 .stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-bottom:50px}
 .stat-card{background:var(--white);border:1px solid var(--border);padding:30px;text-align:center;transition:border-color 0.3s}
 .stat-card:hover{border-color:var(--accent)}
@@ -58,6 +73,19 @@ footer p{font-size:0.7rem;color:#999;font-weight:300}
 <h1 class="eng">Your Practice</h1>
 <p class="welcome" id="welcomeMsg">로딩 중...</p>
 </div>
+<div class="temp-pw-banner" id="tempPwBanner">
+<strong>임시 비밀번호를 사용 중입니다.</strong><br>
+보안을 위해 비밀번호를 변경해주세요.
+<br><button class="change-pw-toggle" onclick="document.getElementById('pwChangeForm').style.display='block'">비밀번호 변경하기</button>
+</div>
+<div class="pw-change-form" id="pwChangeForm">
+<h3 class="eng">Change Password</h3>
+<div class="form-group"><label class="eng">Current Password</label><input type="password" id="currentPw" placeholder="현재 비밀번호 (SMS로 받은 비밀번호)"></div>
+<div class="form-group"><label class="eng">New Password</label><input type="password" id="newPw" placeholder="새 비밀번호 (6자 이상)" minlength="6"></div>
+<div class="form-group"><label class="eng">Confirm New Password</label><input type="password" id="newPwConfirm" placeholder="새 비밀번호 확인"></div>
+<button class="pw-btn" onclick="changePassword()">Change Password</button>
+<div class="pw-msg" id="pwMsg"></div>
+</div>
 <div class="stats-grid">
 <div class="stat-card"><div class="num" id="remainingClasses">-</div><div class="label">잔여 수업 횟수</div></div>
 <div class="stat-card"><div class="num" id="totalAttended">-</div><div class="label">총 출석 횟수</div></div>
@@ -72,7 +100,7 @@ footer p{font-size:0.7rem;color:#999;font-weight:300}
 농협 312-0025-5524-11<br>
 <strong>예금주</strong> 황준성<br>
 <strong>금액</strong> 99,000원<br><br>
-입금 후 관리자 확인이 완료되면 이용권이 활성화됩니다.
+입금 확인 후 이용권이 자동으로 활성화됩니다.
 </div>
 </div>
 <div class="section-box">
@@ -98,6 +126,10 @@ async function loadMypage() {
   try {
     const res = await fetch('/api/mypage');
     const data = await res.json();
+    // Temp password banner
+    if (data.user.password_is_temp) {
+      document.getElementById('tempPwBanner').style.display = 'block';
+    }
     // Stats
     let remaining = 0;
     let activeCount = 0;
@@ -128,6 +160,37 @@ async function loadMypage() {
       document.getElementById('attendanceList').innerHTML = html;
     }
   } catch (err) { console.error(err); }
+}
+async function changePassword() {
+  const msgEl = document.getElementById('pwMsg');
+  msgEl.textContent = '';
+  msgEl.className = 'pw-msg';
+  const currentPw = document.getElementById('currentPw').value;
+  const newPw = document.getElementById('newPw').value;
+  const newPwConfirm = document.getElementById('newPwConfirm').value;
+  if (!currentPw || !newPw || !newPwConfirm) { msgEl.textContent = '모든 필드를 입력해주세요'; msgEl.className = 'pw-msg error'; return; }
+  if (newPw.length < 6) { msgEl.textContent = '새 비밀번호는 6자 이상이어야 합니다'; msgEl.className = 'pw-msg error'; return; }
+  if (newPw !== newPwConfirm) { msgEl.textContent = '새 비밀번호가 일치하지 않습니다'; msgEl.className = 'pw-msg error'; return; }
+  try {
+    const res = await fetch('/api/change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ current_password: currentPw, new_password: newPw })
+    });
+    const data = await res.json();
+    if (data.success) {
+      msgEl.textContent = '비밀번호가 성공적으로 변경되었습니다!';
+      msgEl.className = 'pw-msg success';
+      document.getElementById('tempPwBanner').style.display = 'none';
+      document.getElementById('pwChangeForm').style.display = 'none';
+    } else {
+      msgEl.textContent = data.error;
+      msgEl.className = 'pw-msg error';
+    }
+  } catch (err) {
+    msgEl.textContent = '서버 연결에 실패했습니다';
+    msgEl.className = 'pw-msg error';
+  }
 }
 async function requestPass() {
   try {

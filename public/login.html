@@ -34,6 +34,7 @@ nav ul li a:hover{color:var(--accent)}
 .auth-links a{color:var(--accent);text-decoration:none;transition:color 0.3s}
 .auth-links a:hover{color:var(--text)}
 .error-msg{background:#fff5f5;border:1px solid #e8c4c4;color:#c44;padding:12px;font-size:0.8rem;text-align:center;margin-bottom:20px;display:none;font-weight:300}
+.info-msg{background:var(--section-bg);border:1px solid var(--border);color:#666;padding:14px;font-size:0.78rem;text-align:center;margin-bottom:24px;font-weight:300;line-height:1.8}
 footer{padding:40px;border-top:1px solid var(--border);text-align:center}
 footer .logo-img{height:28px;width:auto;margin-bottom:8px}
 footer p{font-size:0.7rem;color:#999;font-weight:300}
@@ -41,18 +42,19 @@ footer p{font-size:0.7rem;color:#999;font-weight:300}
 </style>
 </head>
 <body>
-<nav><div class="inner"><a href="/" class="logo"><img src="/images/signature.png" alt="Junseong Hwang"></a><ul><li><a href="/">Home</a></li><li><a href="/register">Register</a></li></ul></div></nav>
+<nav><div class="inner"><a href="/" class="logo"><img src="/images/signature.png" alt="Junseong Hwang"></a><ul><li><a href="/">Home</a></li></ul></div></nav>
 <div class="container">
 <div class="auth-box">
 <h2 class="eng">Sign In</h2>
 <p class="subtitle">계정에 로그인하세요</p>
+<div class="info-msg">결제 완료 후 SMS로 받으신 비밀번호로 로그인해주세요.<br>마이페이지에서 비밀번호를 변경할 수 있습니다.</div>
 <div class="error-msg" id="errorMsg"></div>
 <form id="loginForm">
 <div class="form-group"><label class="eng">Email</label><input type="email" id="email" placeholder="이메일 주소" required></div>
 <div class="form-group"><label class="eng">Password</label><input type="password" id="password" placeholder="비밀번호" required></div>
 <button type="submit" class="submit-btn eng">Sign In</button>
 </form>
-<div class="auth-links">계정이 없으신가요? <a href="/register">회원가입</a></div>
+<div class="auth-links"><a href="/">홈으로 돌아가기</a></div>
 </div>
 </div>
 <footer><img class="logo-img" src="/images/signature.png" alt="Junseong Hwang"><p>&copy; 2025 Junseong Hwang. All rights reserved.</p></footer>

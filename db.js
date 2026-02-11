@@ -3,7 +3,6 @@ const { Pool } = require('pg');
 let pool = null;
 let dbReady = false;
 
-// Try multiple possible env var names for the database URL
 const DB_URL = process.env.DATABASE_URL
   || process.env.DATABASE_PUBLIC_URL
   || process.env.DATABASE_PRIVATE_URL
@@ -19,7 +18,6 @@ if (DB_URL) {
     connectionString: DB_URL,
     ssl: { rejectUnauthorized: false }
   });
-
   pool.on('error', (err) => {
     console.error('Unexpected pool error:', err);
   });
@@ -45,8 +43,13 @@ async function initDB() {
         phone VARCHAR(20) NOT NULL,
         password VARCHAR(255) NOT NULL,
         role VARCHAR(20) DEFAULT 'member',
+        password_is_temp BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT NOW()
       );
+    `);
+    // Add password_is_temp column if not exists (for existing tables)
+    await client.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS password_is_temp BOOLEAN DEFAULT FALSE;
     `);
     await client.query(`
       CREATE TABLE IF NOT EXISTS class_passes (
@@ -92,6 +95,22 @@ async function initDB() {
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_session_expire ON session (expire);
     `);
+    // Applications table (클래스 신청)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS applications (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        email VARCHAR(255) NOT NULL,
+        phone VARCHAR(20) NOT NULL,
+        status VARCHAR(20) DEFAULT 'pending',
+        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMP DEFAULT NOW(),
+        paid_at TIMESTAMP
+      );
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_applications_email ON applications (email);`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_applications_phone ON applications (phone);`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_applications_status ON applications (status);`);
     dbReady = true;
     console.log('✅ Database tables initialized successfully');
   } catch (err) {
