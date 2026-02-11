@@ -11,32 +11,29 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Session setup
-function setupSession() {
-  const sessionConfig = {
-    secret: process.env.SESSION_SECRET || 'enneagram-yoga-secret-key-change-in-production',
-    resave: false,
-    saveUninitialized: false,
-    cookie: { maxAge: 30 * 24 * 60 * 60 * 1000, secure: false }
-  };
+// ===================== SESSION (before routes!) =====================
+const sessionConfig = {
+  secret: process.env.SESSION_SECRET || 'enneagram-yoga-secret-key-change-in-production',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { maxAge: 30 * 24 * 60 * 60 * 1000, secure: false }
+};
 
-  const pool = getPool();
-  if (pool) {
-    try {
-      const pgSession = require('connect-pg-simple')(session);
-      sessionConfig.store = new pgSession({ pool, tableName: 'session' });
-      console.log('✅ Session store: PostgreSQL');
-    } catch (err) {
-      console.warn('⚠️  PG session store failed, using memory store:', err.message);
-    }
-  } else {
-    console.log('⚠️  Session store: Memory (no database URL)');
+const initPool = getPool();
+if (initPool) {
+  try {
+    const pgSession = require('connect-pg-simple')(session);
+    sessionConfig.store = new pgSession({ pool: initPool, tableName: 'session' });
+    console.log('✅ Session store: PostgreSQL');
+  } catch (err) {
+    console.warn('⚠️  PG session store failed, using memory store:', err.message);
   }
-
-  app.use(session(sessionConfig));
+} else {
+  console.log('⚠️  Session store: Memory (no database URL)');
 }
+app.use(session(sessionConfig));
 
-// Middleware
+// ===================== MIDDLEWARE =====================
 function requireDB(req, res, next) {
   if (!isDBReady()) return res.status(503).json({ error: '데이터베이스가 연결되지 않았습니다.' });
   next();
@@ -73,7 +70,7 @@ app.post('/api/register', requireDB, async (req, res) => {
     res.json({ success: true, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
   } catch (err) {
     console.error('Register error:', err);
-    res.status(500).json({ error: '서버 오류가 발생했습니다', detail: err.message });
+    res.status(500).json({ error: '서버 오류가 발생했습니다' });
   }
 });
 
@@ -93,7 +90,7 @@ app.post('/api/login', requireDB, async (req, res) => {
     res.json({ success: true, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
   } catch (err) {
     console.error('Login error:', err);
-    res.status(500).json({ error: '서버 오류가 발생했습니다', detail: err.message });
+    res.status(500).json({ error: '서버 오류가 발생했습니다' });
   }
 });
 
@@ -128,7 +125,7 @@ app.get('/api/mypage', requireDB, requireAuth, async (req, res) => {
     });
   } catch (err) {
     console.error('Mypage error:', err);
-    res.status(500).json({ error: '서버 오류', detail: err.message });
+    res.status(500).json({ error: '서버 오류' });
   }
 });
 
@@ -144,7 +141,7 @@ app.post('/api/passes/request', requireDB, requireAuth, async (req, res) => {
     res.json({ success: true, payment: paymentResult.rows[0] });
   } catch (err) {
     console.error('Pass request error:', err);
-    res.status(500).json({ error: '서버 오류', detail: err.message });
+    res.status(500).json({ error: '서버 오류' });
   }
 });
 
@@ -162,7 +159,7 @@ app.get('/api/admin/members', requireDB, requireAdmin, async (req, res) => {
     res.json({ members: result.rows });
   } catch (err) {
     console.error('Admin members error:', err);
-    res.status(500).json({ error: '서버 오류', detail: err.message });
+    res.status(500).json({ error: '서버 오류' });
   }
 });
 
@@ -178,7 +175,7 @@ app.get('/api/admin/payments', requireDB, requireAdmin, async (req, res) => {
     res.json({ payments: result.rows });
   } catch (err) {
     console.error('Admin payments error:', err);
-    res.status(500).json({ error: '서버 오류', detail: err.message });
+    res.status(500).json({ error: '서버 오류' });
   }
 });
 
@@ -204,7 +201,7 @@ app.post('/api/admin/payments/:id/confirm', requireDB, requireAdmin, async (req,
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('Confirm payment error:', err);
-    res.status(500).json({ error: '서버 오류', detail: err.message });
+    res.status(500).json({ error: '서버 오류' });
   } finally {
     client.release();
   }
@@ -235,7 +232,7 @@ app.post('/api/admin/members/:id/attend', requireDB, requireAdmin, async (req, r
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('Attend error:', err);
-    res.status(500).json({ error: '서버 오류', detail: err.message });
+    res.status(500).json({ error: '서버 오류' });
   } finally {
     client.release();
   }
@@ -256,7 +253,7 @@ app.get('/api/admin/stats', requireDB, requireAdmin, async (req, res) => {
     });
   } catch (err) {
     console.error('Stats error:', err);
-    res.status(500).json({ error: '서버 오류', detail: err.message });
+    res.status(500).json({ error: '서버 오류' });
   }
 });
 
@@ -270,14 +267,11 @@ app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'adm
 
 // Health check
 app.get('/api/health', (req, res) => {
-  const pool = getPool();
-  const dbUrl = getDbUrl();
   res.json({
     status: 'ok',
     db: isDBReady(),
-    hasDbUrl: !!dbUrl,
-    dbUrlPrefix: dbUrl ? dbUrl.substring(0, 20) + '...' : 'not set',
-    poolExists: pool !== null,
+    hasDbUrl: !!getDbUrl(),
+    poolExists: getPool() !== null,
     timestamp: new Date().toISOString()
   });
 });
@@ -290,7 +284,6 @@ async function start() {
   } catch (err) {
     console.error('DB init failed, continuing without DB:', err.message);
   }
-  setupSession();
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ Server running on port ${PORT}`);
     console.log(`   Database: ${isDBReady() ? 'Connected' : 'Not connected'}`);
