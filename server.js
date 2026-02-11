@@ -270,9 +270,18 @@ app.get('/register', (req, res) => res.sendFile(path.join(__dirname, 'public', '
 app.get('/mypage', (req, res) => res.sendFile(path.join(__dirname, 'public', 'mypage.html')));
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 
-// Health check
+// Health check with debug info
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', db: isDBReady(), timestamp: new Date().toISOString() });
+  const dbUrl = process.env.DATABASE_URL;
+  res.json({
+    status: 'ok',
+    db: isDBReady(),
+    hasDbUrl: !!dbUrl,
+    dbUrlPrefix: dbUrl ? dbUrl.substring(0, 15) + '...' : 'not set',
+    poolExists: pool !== null,
+    envKeys: Object.keys(process.env).filter(k => k.includes('DATABASE') || k.includes('PG') || k.includes('POSTGRES')),
+    timestamp: new Date().toISOString()
+  });
 });
 
 // ===================== START =====================
@@ -287,6 +296,7 @@ async function start() {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ Server running on port ${PORT}`);
     console.log(`   Database: ${isDBReady() ? 'Connected' : 'Not connected'}`);
+    console.log(`   DATABASE_URL: ${process.env.DATABASE_URL ? 'set' : 'NOT SET'}`);
   });
 }
 start();
