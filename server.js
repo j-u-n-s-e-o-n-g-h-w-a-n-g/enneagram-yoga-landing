@@ -267,13 +267,7 @@ app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'adm
 
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({
-    status: 'ok',
-    db: isDBReady(),
-    hasDbUrl: !!getDbUrl(),
-    poolExists: getPool() !== null,
-    timestamp: new Date().toISOString()
-  });
+  res.json({ status: 'ok', db: isDBReady() });
 });
 
 // ===================== START =====================
