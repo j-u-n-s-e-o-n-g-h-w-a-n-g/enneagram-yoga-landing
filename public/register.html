@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>회원가입 | 에니어그램 요가</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Noto+Serif+KR:wght@200;300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f8f6f3;--text:#2c2c2c;--accent:#8a7968;--accent-light:#b8a99a;--border:#d4cdc4;--white:#fff;--section-bg:#f0ece7}
+body{font-family:'Noto Serif KR',serif;color:var(--text);background:var(--bg);line-height:1.9;min-height:100vh;display:flex;flex-direction:column}
+.eng{font-family:'Cormorant Garamond',serif;letter-spacing:0.08em}
+nav{width:100%;background:rgba(248,246,243,0.95);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);padding:0 40px}
+nav .inner{max-width:1200px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;height:70px}
+nav .logo{display:flex;align-items:center;text-decoration:none}
+nav .logo img{height:36px;width:auto}
+nav ul{list-style:none;display:flex;gap:36px}
+nav ul li a{text-decoration:none;color:var(--text);font-size:0.75rem;letter-spacing:0.12em;text-transform:uppercase;font-family:'Cormorant Garamond',serif;font-weight:400;transition:color 0.3s}
+nav ul li a:hover{color:var(--accent)}
+.container{flex:1;display:flex;align-items:center;justify-content:center;padding:40px 20px}
+.auth-box{max-width:420px;width:100%;padding:60px 40px;background:var(--white);border:1px solid var(--border)}
+.auth-box h2{font-family:'Cormorant Garamond',serif;font-size:2rem;font-weight:300;text-align:center;margin-bottom:8px;letter-spacing:0.05em}
+.auth-box .subtitle{text-align:center;font-size:0.8rem;color:#888;font-weight:300;margin-bottom:40px}
+.form-group{margin-bottom:24px}
+.form-group label{display:block;font-size:0.7rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--accent);margin-bottom:8px;font-family:'Cormorant Garamond',serif}
+.form-group input{width:100%;padding:12px 0;border:none;border-bottom:1px solid var(--border);background:transparent;font-family:'Noto Serif KR',serif;font-size:0.88rem;font-weight:300;color:var(--text);outline:none;transition:border-color 0.3s}
+.form-group input:focus{border-bottom-color:var(--accent)}
+.form-group input::placeholder{color:#ccc;font-weight:200}
+.submit-btn{width:100%;padding:15px;border:1px solid var(--text);background:transparent;color:var(--text);font-family:'Cormorant Garamond',serif;font-size:0.85rem;letter-spacing:0.15em;text-transform:uppercase;cursor:pointer;transition:all 0.4s;margin-top:10px}
+.submit-btn:hover{background:var(--text);color:var(--white)}
+.auth-links{text-align:center;margin-top:24px;font-size:0.8rem;color:#888;font-weight:300}
+.auth-links a{color:var(--accent);text-decoration:none;transition:color 0.3s}
+.auth-links a:hover{color:var(--text)}
+.error-msg{background:#fff5f5;border:1px solid #e8c4c4;color:#c44;padding:12px;font-size:0.8rem;text-align:center;margin-bottom:20px;display:none;font-weight:300}
+footer{padding:40px;border-top:1px solid var(--border);text-align:center}
+footer .logo-img{height:28px;width:auto;margin-bottom:8px}
+footer p{font-size:0.7rem;color:#999;font-weight:300}
+@media(max-width:768px){nav ul{display:none}nav .logo img{height:28px}.auth-box{padding:40px 24px}}
+</style>
+</head>
+<body>
+<nav><div class="inner"><a href="/" class="logo"><img src="/images/signature.png" alt="Junseong Hwang"></a><ul><li><a href="/">Home</a></li><li><a href="/login">Sign In</a></li></ul></div></nav>
+<div class="container">
+<div class="auth-box">
+<h2 class="eng">Create Account</h2>
+<p class="subtitle">회원가입을 진행해주세요</p>
+<div class="error-msg" id="errorMsg"></div>
+<form id="registerForm">
+<div class="form-group"><label class="eng">Name</label><input type="text" id="name" placeholder="이름" required></div>
+<div class="form-group"><label class="eng">Email</label><input type="email" id="email" placeholder="이메일 주소" required></div>
+<div class="form-group"><label class="eng">Phone</label><input type="tel" id="phone" placeholder="휴대폰 번호" required></div>
+<div class="form-group"><label class="eng">Password</label><input type="password" id="password" placeholder="비밀번호 (6자 이상)" minlength="6" required></div>
+<div class="form-group"><label class="eng">Confirm Password</label><input type="password" id="passwordConfirm" placeholder="비밀번호 확인" required></div>
+<button type="submit" class="submit-btn eng">Create Account</button>
+</form>
+<div class="auth-links">이미 계정이 있으신가요? <a href="/login">로그인</a></div>
+</div>
+</div>
+<footer><img class="logo-img" src="/images/signature.png" alt="Junseong Hwang"><p>&copy; 2025 Junseong Hwang. All rights reserved.</p></footer>
+<script>
+document.getElementById('registerForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const errorMsg = document.getElementById('errorMsg');
+  errorMsg.style.display = 'none';
+  const password = document.getElementById('password').value;
+  const passwordConfirm = document.getElementById('passwordConfirm').value;
+  if (password !== passwordConfirm) {
+    errorMsg.textContent = '비밀번호가 일치하지 않습니다';
+    errorMsg.style.display = 'block';
+    return;
+  }
+  try {
+    const res = await fetch('/api/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: document.getElementById('name').value,
+        email: document.getElementById('email').value,
+        phone: document.getElementById('phone').value,
+        password: password
+      })
+    });
+    const data = await res.json();
+    if (data.success) {
+      window.location.href = '/mypage';
+    } else {
+      errorMsg.textContent = data.error;
+      errorMsg.style.display = 'block';
+    }
+  } catch (err) {
+    errorMsg.textContent = '서버 연결에 실패했습니다';
+    errorMsg.style.display = 'block';
+  }
+});
+</script>
+</body>
+</html>

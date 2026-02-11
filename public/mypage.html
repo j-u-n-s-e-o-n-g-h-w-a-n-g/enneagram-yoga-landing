@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>마이페이지 | 에니어그램 요가</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Noto+Serif+KR:wght@200;300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f8f6f3;--text:#2c2c2c;--accent:#8a7968;--accent-light:#b8a99a;--border:#d4cdc4;--white:#fff;--section-bg:#f0ece7}
+body{font-family:'Noto Serif KR',serif;color:var(--text);background:var(--bg);line-height:1.9;min-height:100vh;display:flex;flex-direction:column}
+.eng{font-family:'Cormorant Garamond',serif;letter-spacing:0.08em}
+nav{width:100%;background:rgba(248,246,243,0.95);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);padding:0 40px}
+nav .inner{max-width:1200px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;height:70px}
+nav .logo{display:flex;align-items:center;text-decoration:none}
+nav .logo img{height:36px;width:auto}
+nav ul{list-style:none;display:flex;gap:36px}
+nav ul li a{text-decoration:none;color:var(--text);font-size:0.75rem;letter-spacing:0.12em;text-transform:uppercase;font-family:'Cormorant Garamond',serif;font-weight:400;transition:color 0.3s;cursor:pointer}
+nav ul li a:hover{color:var(--accent)}
+.container{flex:1;max-width:900px;margin:0 auto;padding:60px 40px;width:100%}
+.page-header{margin-bottom:50px}
+.page-header .label{font-family:'Cormorant Garamond',serif;font-size:0.75rem;letter-spacing:0.35em;text-transform:uppercase;color:var(--accent);margin-bottom:8px}
+.page-header h1{font-family:'Cormorant Garamond',serif;font-size:2.5rem;font-weight:300;letter-spacing:0.03em}
+.page-header .welcome{font-size:0.85rem;color:#888;font-weight:300;margin-top:8px}
+.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-bottom:50px}
+.stat-card{background:var(--white);border:1px solid var(--border);padding:30px;text-align:center;transition:border-color 0.3s}
+.stat-card:hover{border-color:var(--accent)}
+.stat-card .num{font-family:'Cormorant Garamond',serif;font-size:2.8rem;font-weight:300;color:var(--accent);line-height:1}
+.stat-card .label{font-size:0.72rem;color:#888;margin-top:8px;font-weight:300}
+.section-box{background:var(--white);border:1px solid var(--border);padding:40px;margin-bottom:30px}
+.section-box h3{font-family:'Cormorant Garamond',serif;font-size:1.3rem;font-weight:300;letter-spacing:0.05em;margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid var(--border)}
+.purchase-btn{display:inline-block;padding:12px 40px;border:1px solid var(--text);background:transparent;color:var(--text);font-family:'Cormorant Garamond',serif;font-size:0.8rem;letter-spacing:0.15em;text-transform:uppercase;cursor:pointer;transition:all 0.4s}
+.purchase-btn:hover{background:var(--text);color:var(--white)}
+table{width:100%;border-collapse:collapse;font-size:0.82rem}
+table th{text-align:left;padding:12px 8px;border-bottom:2px solid var(--border);font-family:'Cormorant Garamond',serif;font-size:0.72rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--accent);font-weight:400}
+table td{padding:12px 8px;border-bottom:1px solid var(--border);font-weight:300}
+.badge{display:inline-block;padding:3px 12px;font-size:0.7rem;border-radius:2px;font-weight:400}
+.badge-pending{background:#fff8e1;color:#c49000;border:1px solid #eed88a}
+.badge-confirmed{background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7}
+.badge-active{background:#e3f2fd;color:#1565c0;border:1px solid #90caf9}
+.badge-used{background:#f5f5f5;color:#888;border:1px solid #ddd}
+.empty-state{text-align:center;padding:40px;color:#aaa;font-size:0.85rem;font-weight:300}
+.bank-info-box{background:var(--section-bg);padding:20px;margin-top:16px;font-size:0.82rem;line-height:2;font-weight:300;display:none}
+.bank-info-box strong{font-weight:500}
+footer{padding:40px;border-top:1px solid var(--border);text-align:center;margin-top:auto}
+footer .logo-img{height:28px;width:auto;margin-bottom:8px}
+footer p{font-size:0.7rem;color:#999;font-weight:300}
+@media(max-width:768px){nav ul{display:none}nav .logo img{height:28px}.stats-grid{grid-template-columns:1fr}.container{padding:40px 20px}.section-box{padding:24px}}
+</style>
+</head>
+<body>
+<nav><div class="inner"><a href="/" class="logo"><img src="/images/signature.png" alt="Junseong Hwang"></a><ul><li><a href="/">Home</a></li><li><a onclick="logout()">Logout</a></li></ul></div></nav>
+<div class="container">
+<div class="page-header">
+<p class="label eng">My Page</p>
+<h1 class="eng">Your Practice</h1>
+<p class="welcome" id="welcomeMsg">로딩 중...</p>
+</div>
+<div class="stats-grid">
+<div class="stat-card"><div class="num" id="remainingClasses">-</div><div class="label">잔여 수업 횟수</div></div>
+<div class="stat-card"><div class="num" id="totalAttended">-</div><div class="label">총 출석 횟수</div></div>
+<div class="stat-card"><div class="num" id="activePasses">-</div><div class="label">보유 이용권</div></div>
+</div>
+<div class="section-box">
+<h3 class="eng">Class Pass</h3>
+<p style="font-size:0.85rem;font-weight:300;color:#666;margin-bottom:20px">12회 이용권 (99,000원)을 구매하시려면 아래 버튼을 눌러주세요.</p>
+<button class="purchase-btn eng" onclick="requestPass()">Purchase Pass</button>
+<div class="bank-info-box" id="bankInfo">
+<strong>입금 계좌</strong><br>
+농협 312-0025-5524-11<br>
+<strong>예금주</strong> 황준성<br>
+<strong>금액</strong> 99,000원<br><br>
+입금 후 관리자 확인이 완료되면 이용권이 활성화됩니다.
+</div>
+</div>
+<div class="section-box">
+<h3 class="eng">Payment History</h3>
+<div id="paymentList"><div class="empty-state">결제 내역이 없습니다</div></div>
+</div>
+<div class="section-box">
+<h3 class="eng">Attendance Record</h3>
+<div id="attendanceList"><div class="empty-state">출석 기록이 없습니다</div></div>
+</div>
+</div>
+<footer><img class="logo-img" src="/images/signature.png" alt="Junseong Hwang"><p>&copy; 2025 Junseong Hwang. All rights reserved.</p></footer>
+<script>
+async function checkAuth() {
+  const res = await fetch('/api/me');
+  const data = await res.json();
+  if (!data.loggedIn) { window.location.href = '/login'; return; }
+  if (data.user.role === 'admin') { window.location.href = '/admin'; return; }
+  document.getElementById('welcomeMsg').textContent = data.user.name + '님, 환영합니다';
+  loadMypage();
+}
+async function loadMypage() {
+  try {
+    const res = await fetch('/api/mypage');
+    const data = await res.json();
+    // Stats
+    let remaining = 0;
+    let activeCount = 0;
+    data.passes.forEach(p => { if (p.status === 'active') { remaining += p.remaining_classes; activeCount++; } });
+    document.getElementById('remainingClasses').textContent = remaining;
+    document.getElementById('totalAttended').textContent = data.attendance.length;
+    document.getElementById('activePasses').textContent = activeCount;
+    // Payments
+    if (data.payments.length > 0) {
+      let html = '<table><thead><tr><th>Date</th><th>Amount</th><th>Status</th></tr></thead><tbody>';
+      data.payments.forEach(p => {
+        const date = new Date(p.created_at).toLocaleDateString('ko-KR');
+        const badge = p.status === 'confirmed' ? 'badge-confirmed' : 'badge-pending';
+        const label = p.status === 'confirmed' ? '확인완료' : '입금대기';
+        html += '<tr><td>' + date + '</td><td>' + p.amount.toLocaleString() + '원</td><td><span class="badge ' + badge + '">' + label + '</span></td></tr>';
+      });
+      html += '</tbody></table>';
+      document.getElementById('paymentList').innerHTML = html;
+    }
+    // Attendance
+    if (data.attendance.length > 0) {
+      let html = '<table><thead><tr><th>Date</th><th>Note</th></tr></thead><tbody>';
+      data.attendance.forEach(a => {
+        const date = new Date(a.attended_at).toLocaleDateString('ko-KR', { year:'numeric', month:'long', day:'numeric', weekday:'short' });
+        html += '<tr><td>' + date + '</td><td>' + (a.note || '-') + '</td></tr>';
+      });
+      html += '</tbody></table>';
+      document.getElementById('attendanceList').innerHTML = html;
+    }
+  } catch (err) { console.error(err); }
+}
+async function requestPass() {
+  try {
+    const res = await fetch('/api/passes/request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    });
+    const data = await res.json();
+    if (data.success) {
+      document.getElementById('bankInfo').style.display = 'block';
+      loadMypage();
+    }
+  } catch (err) { console.error(err); }
+}
+async function logout() {
+  await fetch('/api/logout', { method: 'POST' });
+  window.location.href = '/';
+}
+checkAuth();
+</script>
+</body>
+</html>
