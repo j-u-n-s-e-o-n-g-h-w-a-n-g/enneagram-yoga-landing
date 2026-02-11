@@ -1,37 +1,34 @@
 <svg width="500" height="500" viewBox="0 0 500 500" xmlns="http://www.w3.org/2000/svg">
   <style>
-    /* 기본 배경 */
-    .background { fill: #ffffff; }
+    /* 배경 색상 */
+    .background { fill: #f8f6f3; }
 
-    /* 선과 점의 스타일 정의 (이전 컨셉 유지) */
-    /* 원형 (Circle) */
-    .enneagram-circle {
+    /* 메인 구조 라인 스타일 (원형, 헥사드) - 어두운 색상 */
+    .main-structure {
       fill: none;
-      stroke: #455A64; /* 챠콜 그레이 */
-      stroke-width: 8;
-    }
-    /* 삼각형 (Triangle 9-3-6) */
-    .enneagram-triangle {
-      fill: none;
-      stroke: #0288D1; /* 밝은 파랑 */
-      stroke-width: 6;
+      stroke: #2c2c2c; /* 어두운 챠콜 */
+      stroke-width: 5;
       stroke-linecap: round;
       stroke-linejoin: round;
     }
-    /* 헥사드 (Hexad 1-4-2-8-5-7) */
-    .enneagram-hexad {
+
+    /* 악센트 구조 라인 스타일 (삼각형) - 골드 색상 */
+    /* 삼각형을 골드로 처리하여 시각적 중심을 잡음 */
+    .accent-structure {
       fill: none;
-      stroke: #F57C00; /* 진한 주황 */
-      stroke-width: 6;
+      stroke: #8a7968; /* 뮤트 골드 */
+      stroke-width: 5;
       stroke-linecap: round;
       stroke-linejoin: round;
     }
-    /* 9개의 점 (Points) */
+
+    /* 9개의 점 스타일 */
+    /* 골드로 채우고 얇은 어두운 테두리를 주어 보석 같은 느낌 */
     .enneagram-point {
-      fill: #ffffff; /* 내부 흰색 */
-      stroke: #455A64; /* 테두리는 원과 같은 색 */
-      stroke-width: 4;
-      r: 12; /* 점의 반지름 */
+      fill: #8a7968; /* 골드 채우기 */
+      stroke: #2c2c2c; /* 어두운 테두리 */
+      stroke-width: 2;
+      r: 11; /* 점의 반지름 */
     }
   </style>
 
@@ -39,11 +36,11 @@
 
   <g transform="translate(250, 250)">
     
-    <circle cx="0" cy="0" r="220" class="enneagram-circle" />
+    <circle cx="0" cy="0" r="220" class="main-structure" />
 
-    <path d="M 0,-220 L 190.5,110 L -190.5,110 Z" class="enneagram-triangle" />
+    <path d="M 0,-220 L 190.5,110 L -190.5,110 Z" class="accent-structure" />
 
-    <path d="M 141.4,-169.9 L 75.2,206.7 L 216.5,-38.2 L -141.4,-169.9 L -75.2,206.7 L -216.5,-38.2 Z" class="enneagram-hexad" />
+    <path d="M 141.4,-169.9 L 75.2,206.7 L 216.5,-38.2 L -141.4,-169.9 L -75.2,206.7 L -216.5,-38.2 Z" class="main-structure" />
 
     <g class="points-group">
       <circle cx="0" cy="-220" class="enneagram-point" />
