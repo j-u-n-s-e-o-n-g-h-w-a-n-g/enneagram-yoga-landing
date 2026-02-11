@@ -190,6 +190,41 @@ app.post('/api/webhook/payment-confirm', requireDB, requireApiKey, async (req, r
   }
 });
 
+// ===================== BACKUP API (n8n 전용) =====================
+
+app.get('/api/webhook/backup', requireDB, requireApiKey, async (req, res) => {
+  const pool = getPool();
+  try {
+    const users = await pool.query('SELECT id, name, email, phone, role, password_is_temp, created_at FROM users ORDER BY id');
+    const applications = await pool.query('SELECT * FROM applications ORDER BY id');
+    const classPasses = await pool.query('SELECT * FROM class_passes ORDER BY id');
+    const payments = await pool.query('SELECT * FROM payments ORDER BY id');
+    const attendance = await pool.query('SELECT * FROM attendance ORDER BY id');
+
+    res.json({
+      success: true,
+      backup_date: new Date().toISOString(),
+      data: {
+        users: users.rows,
+        applications: applications.rows,
+        class_passes: classPasses.rows,
+        payments: payments.rows,
+        attendance: attendance.rows
+      },
+      counts: {
+        users: users.rows.length,
+        applications: applications.rows.length,
+        class_passes: classPasses.rows.length,
+        payments: payments.rows.length,
+        attendance: attendance.rows.length
+      }
+    });
+  } catch (err) {
+    console.error('Backup API error:', err);
+    res.status(500).json({ error: '백업 데이터 조회 중 오류가 발생했습니다' });
+  }
+});
+
 // ===================== AUTH API =====================
 
 app.post('/api/register', requireDB, async (req, res) => {
