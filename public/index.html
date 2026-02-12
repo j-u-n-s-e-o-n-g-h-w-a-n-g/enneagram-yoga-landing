@@ -117,7 +117,20 @@ section{padding:120px 40px}
 footer{padding:60px 40px;border-top:1px solid var(--border);text-align:center}
 footer .logo-img{height:32px;width:auto;margin-bottom:12px}
 footer p{font-size:0.72rem;color:#999;font-weight:300}
-@media(max-width:768px){nav{padding:0 24px}nav .inner{padding:0}nav ul{display:none}.hamburger{display:block}nav .logo img{height:28px}.hero h1{font-size:2.8rem}.about-grid,.class-details{grid-template-columns:1fr}section{padding:80px 24px}.section-title,.section-title-kr,.section-title-bold{font-size:2rem}.modal{padding:40px 28px}.privacy-modal{padding:36px 24px}footer .logo-img{height:24px}.sns-icons a{width:36px;height:36px}.sns-icons a svg{width:16px;height:16px}}
+.business-info{font-size:0.72rem;color:#999;font-weight:300;line-height:2;margin-bottom:16px}
+.business-info .bi-row{display:inline}
+.business-info .bi-sep{margin:0 6px;color:#ccc}
+.business-info a{color:#999;text-decoration:underline;text-underline-offset:2px;transition:color 0.3s}
+.business-info a:hover{color:var(--accent)}
+.terms-modal{background:var(--white);padding:50px 40px;max-width:640px;width:90%;position:relative;text-align:left;max-height:80vh;overflow-y:auto}
+.terms-modal h3{font-size:1.1rem;font-weight:500;margin-bottom:28px;line-height:1.8;text-align:center}
+.terms-modal .terms-article{margin-bottom:24px}
+.terms-modal .terms-article h4{font-size:0.9rem;font-weight:500;margin-bottom:10px;color:var(--text)}
+.terms-modal .terms-article p{font-size:0.84rem;font-weight:300;line-height:2.2;color:#555;margin-bottom:8px}
+.terms-modal .terms-supplement{margin-top:30px;padding-top:20px;border-top:1px solid var(--border)}
+.terms-modal .terms-supplement h4{font-size:0.9rem;font-weight:500;margin-bottom:10px;color:var(--text)}
+.terms-modal .terms-supplement p{font-size:0.84rem;font-weight:300;line-height:2.2;color:#555}
+@media(max-width:768px){nav{padding:0 24px}nav .inner{padding:0}nav ul{display:none}.hamburger{display:block}nav .logo img{height:28px}.hero h1{font-size:2.8rem}.about-grid,.class-details{grid-template-columns:1fr}section{padding:80px 24px}.section-title,.section-title-kr,.section-title-bold{font-size:2rem}.modal{padding:40px 28px}.privacy-modal{padding:36px 24px}.terms-modal{padding:36px 24px}footer .logo-img{height:24px}.sns-icons a{width:36px;height:36px}.sns-icons a svg{width:16px;height:16px}.business-info .bi-sep{display:none}.business-info .bi-row{display:block}}
 </style>
 </head>
 <body>
@@ -130,6 +143,29 @@ footer p{font-size:0.72rem;color:#999;font-weight:300}
 <section class="apply" id="apply"><div class="section-inner"><p class="section-label eng">Apply</p><h2 class="section-title-bold">데일리 요가 클래스 신청</h2><p class="section-text" style="text-align:center;max-width:500px;margin:-30px auto 50px">아래 정보를 입력해주세요.</p><form class="apply-form" id="applyForm" onsubmit="return handleSubmit(event)"><div class="form-group"><label>Name</label><input type="text" id="userName" placeholder="이름을 입력해주세요" required></div><div class="form-group"><label>Phone</label><input type="tel" id="userPhone" placeholder="휴대폰 번호를 입력해주세요" required></div><div class="form-group"><label>Email</label><input type="email" id="userEmail" placeholder="이메일 주소를 입력해주세요" required></div><div class="privacy-consent"><input type="checkbox" id="privacyConsent"><label for="privacyConsent"><span class="required">(필수)</span> <a href="#" onclick="openPrivacyModal(event)">개인정보 수집 및 이용</a>에 동의합니다.</label></div><div style="text-align:center"><button type="submit" class="submit-btn" id="submitBtn" disabled>신청하기</button></div></form></div></section>
 <div class="modal-overlay" id="modalOverlay"><div class="modal"><button class="modal-close" onclick="closeModal()">×</button><div class="check-icon">✓</div><h3 class="eng">Application Received</h3><div id="modalActiveContent"><p style="font-size:0.85rem;font-weight:300;margin-bottom:20px;color:#555">클래스 신청이 접수되었습니다.<br>아래 계좌로 <strong>10분 이내</strong>에 입금해주시면<br>자동으로 신청이 완료됩니다.</p><div class="bank-info"><strong>입금 계좌</strong><br>농협 312-0025-5524-11<br><strong>예금주</strong> 황준성<br><strong>금액</strong> 99,000원 (12회 이용권)</div><div class="notice-highlight">신청자명과 입금자명이 동일해야 자동완료 처리가 됩니다.<br>입금 후 입력하신 휴대폰 번호로 현금영수증이 자동 발급됩니다.</div><div class="timer" id="timerDisplay">10:00</div><p class="notice">입금 확인 후 로그인 정보가 SMS로 발송됩니다.<br>SMS로 받은 비밀번호로 마이페이지에 로그인할 수 있습니다.</p></div><div class="timer-expired" id="timerExpired"><p>예정된 입금 시간이 종료되었습니다.<br>새로운 신청을 통해 다시 진행해 주세요.</p></div></div></div>
 <div class="modal-overlay" id="privacyModalOverlay"><div class="privacy-modal"><button class="modal-close" onclick="closePrivacyModal()">×</button><h3>데일리 요가 클래스 신청자<br>개인정보 수집, 이용 동의</h3><p>에니어그램 클럽 운영자는 실시간 수업 및 유료결제 서비스 등을 제공하기 위해 이용자의 개인정보를 활용하고자 합니다. 제공해주신 개인정보는 정해진 외의 용도로 활용하지 않습니다.</p><p>운영자는 실시간 수업을 위해 아래와 같이 개인정보를 수집, 이용합니다.</p><ul><li>이용 목적: 실시간 수업 관련 콘텐츠 제공 및 관리</li><li>항목: 이름, 연락처, 이메일 주소</li><li>보유기간: 콘텐츠 제공 요청 취소 시까지</li></ul><p class="notice-text">위 개인정보 수집, 이용 동의를 거부하실 수 있습니다. 동의를 거부할 경우 서비스 이용이 제한됩니다.</p></div></div>
+<!-- Terms of Service Modal -->
+<div class="modal-overlay" id="termsModalOverlay"><div class="terms-modal"><button class="modal-close" onclick="closeTermsModal()">×</button><h3>에니어그램 클럽 이용약관</h3>
+<div class="terms-article"><h4>제1조 (목적)</h4><p>이 약관은 에니어그램 클럽(이하 "회사")이 제공하는 온라인 요가 클래스 서비스(이하 "서비스")의 이용조건 및 절차, 회사와 회원 간의 권리·의무 및 책임사항을 규정함을 목적으로 합니다.</p></div>
+<div class="terms-article"><h4>제2조 (정의)</h4><p>① "서비스"란 회사가 ZOOM을 통해 제공하는 실시간 온라인 요가 클래스 및 이에 부수하는 제반 서비스를 말합니다.<br>② "회원"이란 이 약관에 동의하고 서비스 이용 자격을 부여받은 자를 말합니다.<br>③ "이용권"이란 회원이 서비스를 이용할 수 있는 횟수 또는 기간을 포함한 이용 자격을 말합니다.</p></div>
+<div class="terms-article"><h4>제3조 (약관의 효력 및 변경)</h4><p>① 이 약관은 서비스 화면에 게시하거나 기타의 방법으로 회원에게 공지함으로써 효력이 발생합니다.<br>② 회사는 관련 법령을 위배하지 않는 범위에서 이 약관을 개정할 수 있으며, 개정 시 적용일자 7일 전부터 공지합니다.</p></div>
+<div class="terms-article"><h4>제4조 (서비스의 내용)</h4><p>① 회사는 평일 오전(09:30~10:30) 및 저녁(18:30~19:30) ZOOM을 통한 실시간 온라인 요가 클래스를 제공합니다.<br>② 수업 구성: 워터 브리딩(10분) + 티베탄 라이츠·빈야사 플로우(40분) + 질의응답(10분)<br>③ 회사는 서비스 개선을 위해 수업 시간, 구성 등을 변경할 수 있으며, 변경 시 사전에 공지합니다.</p></div>
+<div class="terms-article"><h4>제5조 (회원가입 및 이용권 구매)</h4><p>① 서비스 이용을 원하는 자는 홈페이지에서 클래스 신청 후 이용료를 입금하면 자동으로 회원가입 및 이용권이 발급됩니다.<br>② 이용권 종류: 12회 이용권 (99,000원, 유효기간 3개월)<br>③ 회원가입 시 임시 비밀번호가 SMS로 발송되며, 마이페이지에서 변경할 수 있습니다.</p></div>
+<div class="terms-article"><h4>제6조 (이용권의 유효기간 및 소멸)</h4><p>① 이용권의 유효기간은 발급일로부터 3개월입니다.<br>② 유효기간 내 사용하지 않은 잔여 횟수는 소멸되며, 환불 대상이 되지 않습니다.<br>③ 이용권의 유효기간 연장은 회사의 별도 정책에 따릅니다.</p></div>
+<div class="terms-article"><h4>제7조 (출석 확인)</h4><p>① 출석은 ZOOM 미팅 참여 기록을 기반으로 자동 처리됩니다.<br>② 1회 수업당 1회만 차감되며, 동일 수업 중 여러 번 입퇴장하더라도 중복 차감되지 않습니다.<br>③ 출석 처리 결과는 마이페이지에서 확인할 수 있습니다.</p></div>
+<div class="terms-article"><h4>제8조 (결제 및 환불)</h4><p>① 결제는 무통장 입금(농협)으로 진행되며, 입금 확인 후 자동으로 이용권이 활성화됩니다.<br>② 환불 규정:<br>- 이용권 사용 전: 전액 환불<br>- 이용권 사용 후: 잔여 횟수에 대해 (이용권 금액 ÷ 총 횟수 × 잔여 횟수) 계산 후 환불<br>- 유효기간 만료 후: 환불 불가<br>③ 환불 요청은 이메일(junseong@junseonghwang.com)로 접수합니다.</p></div>
+<div class="terms-article"><h4>제9조 (서비스 이용 시간)</h4><p>① 서비스는 평일(월~금) 제공되며, 공휴일 및 회사 사정에 의해 휴강할 수 있습니다.<br>② 휴강 시 최소 전일까지 공지하며, 해당 수업은 이용 횟수에서 차감되지 않습니다.</p></div>
+<div class="terms-article"><h4>제10조 (서비스의 변경 및 중단)</h4><p>① 회사는 운영상, 기술상의 필요에 따라 서비스를 변경하거나 중단할 수 있습니다.<br>② 서비스 중단 시 잔여 이용권에 대해 제8조의 환불 규정을 적용합니다.</p></div>
+<div class="terms-article"><h4>제11조 (회원의 의무)</h4><p>① 회원은 수업 중 타인의 학습을 방해하는 행위를 하여서는 안 됩니다.<br>② 회원은 수업 내용을 무단으로 녹화, 녹음, 배포하여서는 안 됩니다.<br>③ 회원은 자신의 계정을 타인에게 양도하거나 공유할 수 없습니다.<br>④ 위 사항을 위반할 경우 서비스 이용이 제한될 수 있습니다.</p></div>
+<div class="terms-article"><h4>제12조 (회사의 의무)</h4><p>① 회사는 안정적인 서비스 제공을 위해 최선을 다합니다.<br>② 회사는 회원의 개인정보를 보호하며, 개인정보처리방침에 따라 관리합니다.<br>③ 회사는 회원의 불만 및 건의사항을 성실히 처리합니다.</p></div>
+<div class="terms-article"><h4>제13조 (개인정보 보호)</h4><p>① 회사는 회원의 개인정보를 수집 시 서비스 제공에 필요한 최소한의 정보만 수집합니다.<br>② 수집하는 개인정보: 이름, 연락처, 이메일 주소<br>③ 수집된 개인정보는 서비스 제공 및 운영 목적으로만 사용되며, 회원 탈퇴 시 즉시 파기합니다.</p></div>
+<div class="terms-article"><h4>제14조 (면책조항)</h4><p>① 회사는 천재지변, 전쟁, 기간통신사업자의 서비스 중지 등 불가항력적 사유로 인한 서비스 중단에 대해 책임을 지지 않습니다.<br>② 회사는 회원의 귀책사유로 인한 서비스 이용 장애에 대해 책임을 지지 않습니다.<br>③ 요가 수련 중 발생하는 부상이나 건강 문제에 대해 회사는 책임을 지지 않으며, 회원은 자신의 건강 상태를 고려하여 참여해야 합니다.</p></div>
+<div class="terms-article"><h4>제15조 (저작권)</h4><p>① 수업 내용, 교안, 영상 등 서비스와 관련된 모든 콘텐츠의 저작권은 회사에 있습니다.<br>② 회원은 회사의 사전 동의 없이 이를 복제, 전송, 출판, 배포, 방송 등의 방법으로 이용하거나 제3자에게 이용하게 할 수 없습니다.</p></div>
+<div class="terms-article"><h4>제16조 (분쟁 해결)</h4><p>① 회사와 회원 간에 발생한 분쟁은 상호 협의하여 해결합니다.<br>② 협의가 이루어지지 않을 경우, 관할 법원은 회사 소재지의 법원으로 합니다.</p></div>
+<div class="terms-article"><h4>제17조 (손해배상)</h4><p>회사 또는 회원이 이 약관을 위반하여 상대방에게 손해를 입힌 경우, 그 손해를 배상할 책임이 있습니다.</p></div>
+<div class="terms-article"><h4>제18조 (기타)</h4><p>① 이 약관에서 정하지 않은 사항은 관련 법령 및 상관례에 따릅니다.<br>② 이 약관의 해석에 관하여 다툼이 있는 경우 관련 법령 및 합리적인 관행에 따라 해석합니다.</p></div>
+<div class="terms-article"><h4>제19조 (특별 규정)</h4><p>온라인 실시간 수업의 특성상, 인터넷 연결 상태에 따라 수업 품질이 달라질 수 있으며, 이는 환불 사유에 해당하지 않습니다. 다만, 회사 측 사유로 수업이 정상적으로 진행되지 못한 경우 해당 수업은 이용 횟수에서 차감되지 않습니다.</p></div>
+<div class="terms-supplement"><h4>부칙</h4><p>이 약관은 2025년 2월 12일부터 시행합니다.</p></div>
+</div></div>
 <footer>
 <div class="sns-icons">
 <a href="https://www.youtube.com/@junseonghwang" target="_blank" rel="noopener" title="YouTube"><svg viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg></a>
@@ -142,6 +178,16 @@ footer p{font-size:0.72rem;color:#999;font-weight:300}
 <a href="https://brunch.co.kr/@junseonghwang" target="_blank" rel="noopener" title="Brunch"><svg viewBox="0 0 24 24"><path d="M16.612 5.373c-.212-.268-.648-.131-1.618.727-1.208 1.064-3.035 4.167-4.03 6.025-.112.207-.463.826-.906 1.603h-.002c-.541 1.343-.722 1.443-1.262 2.408-.178-.063-.373-.158-.572-.302l-.127.219c.103.105.293.249.536.363-.494.85-.855 1.474-.879 1.513-.066.117-.005.168.07.134.095-.041.185-.08.268-.117.686-.294.828-.421.879-.707.09-.521.353-.614.356-.614l.141-.005c.224-.012.697-.051 1.299-.17.397-.078.85-.268 1.327-.429.246-.08.497-.171.748-.283.784-.343 3.01-1.639 3.01-3.378 0-.66-.399-1.038-1.082-1.038-.96 0-2.214.835-3.617 2.296a.063.063 0 0 1-.08-.01c.178-.572.827-2.103 2.586-3.818 1.018-.996.5-1.381.5-1.381s1.028-.47 1.8-1.481c.463-.601 1.05-1.783.794-2.107zm-3.37 7.474l.044-.022c.258-.129.507-.2.699-.2.156 0 .275.044.353.134.09.098.122.249.1.446-.149 1.22-1.376 2.372-2.455 2.93-.197.1-.399.19-.598.266-1.062.419-2.085.519-2.319.541h-.051c.015-.022.636-1.007 1.617-2.054.711-.76 1.608-1.557 2.606-2.04h.003zM13.614 8.742c-.224.156.002.273.007.494.005.275-.497.616-1.26 1.442 1.462-2.79 3.622-4.868 3.622-4.868-.443 1.43-1.53 2.348-2.367 2.934l-.002-.002z"/><path d="M16.688 18.747l.105-.192H8.549l-.102.192h8.241z"/></svg></a>
 </div>
 <img class="logo-img" src="/images/signature.png" alt="Junseong Hwang">
+<div class="business-info">
+<span class="bi-row">상호명: 에니어그램 클럽</span><span class="bi-sep">|</span>
+<span class="bi-row">대표: 황준성</span><span class="bi-sep">|</span>
+<span class="bi-row">사업자등록번호: 666-02-03422</span><br>
+<span class="bi-row">주소: 제주도 서귀포시 서호중앙로 55 유포리아 C동 319호</span><br>
+<span class="bi-row">전화: 070-7954-8182</span><span class="bi-sep">|</span>
+<span class="bi-row">이메일: junseong@junseonghwang.com</span><br>
+<span class="bi-row"><a href="#" onclick="openTermsModal(event)">이용약관</a></span><span class="bi-sep">|</span>
+<span class="bi-row">통신판매신고번호: 제2025-제주대륜-0029호</span>
+</div>
 <p>&copy; 2025 Junseong Hwang. All rights reserved.</p>
 </footer>
 <script>
@@ -160,6 +206,11 @@ function closeModal(){document.getElementById('modalOverlay').classList.remove('
 function openPrivacyModal(e){e.preventDefault();document.getElementById('privacyModalOverlay').classList.add('active')}
 function closePrivacyModal(){document.getElementById('privacyModalOverlay').classList.remove('active')}
 document.getElementById('privacyModalOverlay').addEventListener('click',function(e){if(e.target===this)closePrivacyModal()});
+function openTermsModal(e){if(e)e.preventDefault();document.getElementById('termsModalOverlay').classList.add('active');document.body.style.overflow='hidden'}
+function closeTermsModal(){document.getElementById('termsModalOverlay').classList.remove('active');document.body.style.overflow=''}
+document.getElementById('termsModalOverlay').addEventListener('click',function(e){if(e.target===this)closeTermsModal()});
+// Handle /term URL
+if(window.location.pathname==='/term'){window.addEventListener('DOMContentLoaded',function(){openTermsModal()})}
 let timerInterval=null;
 function startTimer(){if(timerInterval)clearInterval(timerInterval);let time=600;const display=document.getElementById('timerDisplay');timerInterval=setInterval(()=>{const min=Math.floor(time/60);const sec=time%60;display.textContent=min.toString().padStart(2,'0')+':'+sec.toString().padStart(2,'0');if(time<=0){clearInterval(timerInterval);timerInterval=null;display.textContent='00:00';document.getElementById('modalActiveContent').style.display='none';document.getElementById('timerExpired').style.display='block'}time--},1000)}
 function toggleMenu(){const btn=document.getElementById('hamburgerBtn');const menu=document.getElementById('mobileMenu');btn.classList.toggle('active');menu.classList.toggle('active')}
