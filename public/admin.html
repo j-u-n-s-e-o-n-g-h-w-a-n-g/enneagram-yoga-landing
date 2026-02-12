@@ -24,7 +24,7 @@ nav ul li a:hover{color:var(--accent)}
 .page-header{margin-bottom:50px}
 .page-header .label{font-family:'Cormorant Garamond',serif;font-size:0.75rem;letter-spacing:0.35em;text-transform:uppercase;color:var(--accent);margin-bottom:8px}
 .page-header h1{font-family:'Cormorant Garamond',serif;font-size:2.5rem;font-weight:300;letter-spacing:0.03em}
-.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;margin-bottom:50px}
+.stats-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:20px;margin-bottom:50px}
 .stat-card{background:var(--white);border:1px solid var(--border);padding:28px;text-align:center}
 .stat-card .num{font-family:'Cormorant Garamond',serif;font-size:2.5rem;font-weight:300;color:var(--accent);line-height:1}
 .stat-card .label{font-size:0.7rem;color:#888;margin-top:8px;font-weight:300}
@@ -83,11 +83,12 @@ table tr.clickable:hover{background:var(--section-bg)}
 footer{padding:40px;border-top:1px solid var(--border);text-align:center;margin-top:auto}
 footer .logo-img{height:28px;width:auto;margin-bottom:8px}
 footer p{font-size:0.7rem;color:#999;font-weight:300}
-@media(max-width:768px){nav ul{display:none}nav{padding:0 24px}nav .logo img{height:28px}.stats-grid{grid-template-columns:repeat(2,1fr)}.container{padding:40px 16px}.section-box{padding:20px}table{font-size:0.72rem}.tabs{overflow-x:auto}.detail-info{grid-template-columns:1fr}.detail-stats{grid-template-columns:1fr}.add-credits-form{flex-direction:column;align-items:stretch}}
+.hamburger{display:none;background:none;border:none;font-size:1.5rem;color:var(--text);cursor:pointer}
+@media(max-width:768px){.hamburger{display:block}nav ul{display:none;position:absolute;top:100%;left:0;right:0;background:var(--white);border-bottom:1px solid var(--border);padding:20px;flex-direction:column;gap:12px}nav ul.open{display:flex}nav{padding:0 24px}nav .logo img{height:28px}.stats-grid{grid-template-columns:repeat(2,1fr)}.container{padding:40px 16px}.section-box{padding:20px}table{font-size:0.72rem}.tabs{overflow-x:auto}.detail-info{grid-template-columns:1fr}.detail-stats{grid-template-columns:1fr}.add-credits-form{flex-direction:column;align-items:stretch}}
 </style>
 </head>
 <body>
-<nav><div class="inner"><a href="/" class="logo"><img src="/images/signature.png" alt="Junseong Hwang"><span class="admin-badge eng">ADMIN</span></a><ul><li><a href="/">Home</a></li><li><a onclick="logout()">Logout</a></li></ul></div></nav>
+<nav><div class="inner"><a href="/" class="logo"><img src="/images/signature.png" alt="Junseong Hwang"><span class="admin-badge eng">ADMIN</span></a><ul><li><a href="/">Home</a></li><li><a onclick="logout()">Logout</a></li></ul><button class="hamburger" onclick="toggleMenu()">&#9776;</button></div></nav>
 <div class="container">
 <div class="page-header">
 <p class="label eng">Admin Dashboard</p>
@@ -98,6 +99,7 @@ footer p{font-size:0.7rem;color:#999;font-weight:300}
 <div class="stat-card"><div class="num" id="statPending">0</div><div class="label">입금 대기</div></div>
 <div class="stat-card"><div class="num" id="statActive">0</div><div class="label">활성 이용권</div></div>
 <div class="stat-card"><div class="num" id="statToday">0</div><div class="label">오늘 출석</div></div>
+<div class="stat-card"><div class="num" id="statApplications">0</div><div class="label">신청 대기</div></div>
 </div>
 
 <!-- Main List View -->
@@ -105,8 +107,10 @@ footer p{font-size:0.7rem;color:#999;font-weight:300}
 <div class="tabs">
 <button class="tab active" onclick="switchTab('payments')">입금 관리</button>
 <button class="tab" onclick="switchTab('members')">회원 관리</button>
+<button class="tab" onclick="switchTab('applications')">신청 관리</button>
 </div>
 <div class="tab-content active" id="tab-payments">
+<div style="margin-bottom:16px"><input type="text" id="searchPayments" placeholder="이름, 전화번호, 입금자명으로 검색..." style="width:100%;padding:10px;border:1px solid var(--border);font-family:'Noto Serif KR',serif;font-size:0.82rem;outline:none" onkeyup="if(event.key==='Enter')searchPaymentsFn()"><button class="action-btn small" style="margin-top:8px" onclick="searchPaymentsFn()">검색</button></div>
 <div class="filter-row">
 <button class="filter-btn active" onclick="filterPayments('all', this)">전체</button>
 <button class="filter-btn" onclick="filterPayments('pending', this)">입금대기</button>
@@ -115,7 +119,16 @@ footer p{font-size:0.7rem;color:#999;font-weight:300}
 <div class="section-box"><div id="paymentList"><div class="empty-state">결제 내역이 없습니다</div></div></div>
 </div>
 <div class="tab-content" id="tab-members">
+<div style="margin-bottom:16px"><input type="text" id="searchMembers" placeholder="이름, 이메일, 전화번호로 검색..." style="width:100%;padding:10px;border:1px solid var(--border);font-family:'Noto Serif KR',serif;font-size:0.82rem;outline:none" onkeyup="if(event.key==='Enter')searchMembersFn()"><button class="action-btn small" style="margin-top:8px" onclick="searchMembersFn()">검색</button></div>
 <div class="section-box"><div id="memberList"><div class="empty-state">회원이 없습니다</div></div></div>
+</div>
+<div class="tab-content" id="tab-applications">
+<div class="filter-row">
+<button class="filter-btn active" onclick="filterApplications('all', this)">전체</button>
+<button class="filter-btn" onclick="filterApplications('pending', this)">대기</button>
+<button class="filter-btn" onclick="filterApplications('paid', this)">입금완료</button>
+</div>
+<div class="section-box"><div id="applicationList"><div class="empty-state">신청 내역이 없습니다</div></div></div>
 </div>
 </div>
 
@@ -154,7 +167,7 @@ footer p{font-size:0.7rem;color:#999;font-weight:300}
 </div>
 </div>
 </div>
-<footer><img class="logo-img" src="/images/signature.png" alt="Junseong Hwang"><p>&copy; 2025 Junseong Hwang. All rights reserved.</p></footer>
+<footer><img class="logo-img" src="/images/signature.png" alt="Junseong Hwang"><p>&copy; 2026 Junseong Hwang. All rights reserved.</p></footer>
 <script>
 let currentMemberId = null;
 
@@ -170,6 +183,7 @@ async function loadDashboard() {
   loadStats();
   loadPayments('all');
   loadMembers();
+  loadApplications('all');
 }
 
 async function loadStats() {
@@ -180,12 +194,13 @@ async function loadStats() {
     document.getElementById('statPending').textContent = data.pendingPayments;
     document.getElementById('statActive').textContent = data.activePasses;
     document.getElementById('statToday').textContent = data.todayAttendance;
+    document.getElementById('statApplications').textContent = data.pendingApplications || 0;
   } catch (err) { console.error(err); }
 }
 
-async function loadPayments(status) {
+async function loadPayments(status,search) {
   try {
-    const res = await fetch('/api/admin/payments?status=' + status);
+    const res = await fetch('/api/admin/payments?status=' + status + (search ? '&search=' + encodeURIComponent(search) : ''));
     const data = await res.json();
     if (data.payments.length === 0) {
       document.getElementById('paymentList').innerHTML = '<div class="empty-state">결제 내역이 없습니다</div>';
@@ -210,9 +225,9 @@ async function loadPayments(status) {
   } catch (err) { console.error(err); }
 }
 
-async function loadMembers() {
+async function loadMembers(search) {
   try {
-    const res = await fetch('/api/admin/members');
+    const res = await fetch('/api/admin/members' + (search ? '?search=' + encodeURIComponent(search) : ''));
     const data = await res.json();
     if (data.members.length === 0) {
       document.getElementById('memberList').innerHTML = '<div class="empty-state">회원이 없습니다</div>';
@@ -226,6 +241,31 @@ async function loadMembers() {
     html += '</tbody></table>';
     document.getElementById('memberList').innerHTML = html;
   } catch (err) { console.error(err); }
+}
+
+async function loadApplications(status){
+  try{
+    const res=await fetch('/api/admin/applications?status='+status);
+    const data=await res.json();
+    if(!data.applications||data.applications.length===0){
+      document.getElementById('applicationList').innerHTML='<div class="empty-state">신청 내역이 없습니다</div>';
+      return;
+    }
+    let html='<table><thead><tr><th>Date</th><th>Name</th><th>Email</th><th>Phone</th><th>Status</th></tr></thead><tbody>';
+    data.applications.forEach(a=>{
+      const date=new Date(a.created_at).toLocaleDateString('ko-KR');
+      const badge=a.status==='paid'?'badge-confirmed':'badge-pending';
+      const label=a.status==='paid'?'입금완료':'대기';
+      html+='<tr><td>'+date+'</td><td>'+a.name+'</td><td>'+a.email+'</td><td>'+a.phone+'</td><td><span class="badge '+badge+'">'+label+'</span></td></tr>';
+    });
+    html+='</tbody></table>';
+    document.getElementById('applicationList').innerHTML=html;
+  }catch(err){console.error(err);}
+}
+function filterApplications(status,btn){
+  document.querySelectorAll('#tab-applications .filter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  loadApplications(status);
 }
 
 // ========== Member Detail ==========
@@ -411,10 +451,15 @@ function filterPayments(status, btn) {
   loadPayments(status);
 }
 
+function searchPaymentsFn(){const q=document.getElementById('searchPayments').value;loadPayments('all',q);}
+function searchMembersFn(){const q=document.getElementById('searchMembers').value;loadMembers(q);}
+
 async function logout() {
   await fetch('/api/logout', { method: 'POST' });
   window.location.href = '/';
 }
+
+function toggleMenu(){document.querySelector('nav ul').classList.toggle('open');}
 
 checkAuth();
 </script>
