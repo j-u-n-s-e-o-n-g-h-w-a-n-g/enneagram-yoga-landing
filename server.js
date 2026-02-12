@@ -103,6 +103,9 @@ app.post('/api/webhook/payment-confirm', requireDB, requireApiKey, async (req, r
       return res.status(400).json({ error: '입금자명, 전화번호, 이메일 중 하나 이상 필요합니다' });
     }
 
+    const paidAmount = parseInt(amount) || 0;
+    const expectedAmount = 99000;
+
     // 1. Find matching application
     let appResult;
     const normalizedPhone = phone ? phone.replace(/[-\s]/g, '') : null;
@@ -131,7 +134,28 @@ app.post('/api/webhook/payment-confirm', requireDB, requireApiKey, async (req, r
 
     const application = appResult.rows[0];
 
-    // 2. Check for existing user
+    // 2. Check amount - underpaid
+    if (paidAmount > 0 && paidAmount < expectedAmount) {
+      const shortage = expectedAmount - paidAmount;
+      // Record partial payment but don't activate pass
+      await client.query(
+        "INSERT INTO payments (user_id, amount, depositor_name, status, confirmed_at) VALUES ((SELECT id FROM users WHERE email = $1 LIMIT 1), $2, $3, 'underpaid', NOW())",
+        [application.email, paidAmount, depositor_name || application.name]
+      );
+      await client.query('COMMIT');
+      return res.json({
+        success: false,
+        status: 'underpaid',
+        paid_amount: paidAmount,
+        expected_amount: expectedAmount,
+        shortage: shortage,
+        user_name: application.name,
+        user_phone: application.phone,
+        message: paidAmount.toLocaleString() + '원이 입금되어 ' + shortage.toLocaleString() + '원이 부족합니다. 농협 312-0025-5524-11 (황준성) 계좌로 차액을 추가 입금해주세요.'
+      });
+    }
+
+    // 3. Check for existing user
     let userId;
     let isNewUser = false;
     let tempPassword = null;
@@ -152,25 +176,36 @@ app.post('/api/webhook/payment-confirm', requireDB, requireApiKey, async (req, r
       isNewUser = true;
     }
 
-    // 3. Create class pass
+    // 4. Create class pass (with 3-month expiry)
     const passResult = await client.query(
-      "INSERT INTO class_passes (user_id, total_classes, remaining_classes, status) VALUES ($1, 12, 12, 'active') RETURNING *",
+      "INSERT INTO class_passes (user_id, total_classes, remaining_classes, status, expires_at) VALUES ($1, 12, 12, 'active', NOW() + INTERVAL '3 months') RETURNING *",
       [userId]
     );
 
-    // 4. Create payment record
+    // 5. Create payment record
     await client.query(
       "INSERT INTO payments (user_id, amount, depositor_name, status, confirmed_at, class_pass_id) VALUES ($1, $2, $3, 'confirmed', NOW(), $4)",
-      [userId, amount || 99000, depositor_name || application.name, passResult.rows[0].id]
+      [userId, paidAmount || expectedAmount, depositor_name || application.name, passResult.rows[0].id]
     );
 
-    // 5. Update application
+    // 6. Update application
     await client.query(
       "UPDATE applications SET status = 'paid', user_id = $1, paid_at = NOW() WHERE id = $2",
       [userId, application.id]
     );
 
     await client.query('COMMIT');
+
+    // 7. Check overpaid
+    let overpaidInfo = null;
+    if (paidAmount > expectedAmount) {
+      const excess = paidAmount - expectedAmount;
+      overpaidInfo = {
+        status: 'overpaid',
+        excess: excess,
+        message: paidAmount.toLocaleString() + '원이 입금되어 ' + excess.toLocaleString() + '원이 초과 입금되었습니다. 차액은 입금하신 계좌로 반환될 예정입니다.'
+      };
+    }
 
     res.json({
       success: true,
@@ -180,7 +215,10 @@ app.post('/api/webhook/payment-confirm', requireDB, requireApiKey, async (req, r
       user_email: application.email,
       user_phone: application.phone,
       is_new_user: isNewUser,
-      pass_id: passResult.rows[0].id
+      pass_id: passResult.rows[0].id,
+      expires_at: passResult.rows[0].expires_at,
+      paid_amount: paidAmount || expectedAmount,
+      overpaid: overpaidInfo
     });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -238,7 +276,7 @@ app.post('/api/register', requireDB, async (req, res) => {
     if (existing.rows.length > 0) return res.status(400).json({ error: '이미 가입된 이메일입니다' });
     const hashed = await bcrypt.hash(password, 10);
     const result = await pool.query(
-      'INSERT INTO users (name, email, phone, password) VALUES ($1, $2, $3, $4) RETURNING id, name, email, role',
+      'INSERT INTO users (name, email, password) VALUES ($1, $2, $3, $4) RETURNING id, name, email, role',
       [name, email, phone, hashed]
     );
     const user = result.rows[0];
@@ -388,7 +426,7 @@ app.post('/api/admin/payments/:id/confirm', requireDB, requireAdmin, async (req,
     if (payment.rows.length === 0) { await client.query('ROLLBACK'); return res.status(404).json({ error: '결제를 찾을 수 없습니다' }); }
     if (payment.rows[0].status === 'confirmed') { await client.query('ROLLBACK'); return res.status(400).json({ error: '이미 확인된 결제입니다' }); }
     const passResult = await client.query(
-      'INSERT INTO class_passes (user_id, total_classes, remaining_classes, status) VALUES ($1, 12, 12, $2) RETURNING *',
+      "INSERT INTO class_passes (user_id, total_classes, remaining_classes, status, expires_at) VALUES ($1, 12, 12, $2, NOW() + INTERVAL '3 months') RETURNING *",
       [payment.rows[0].user_id, 'active']
     );
     await client.query(
@@ -470,6 +508,48 @@ app.get('/api/admin/applications', requireDB, requireAdmin, async (req, res) => 
     res.json({ applications: result.rows });
   } catch (err) {
     console.error('Admin applications error:', err);
+    res.status(500).json({ error: '서버 오류' });
+  }
+});
+
+// ===================== API: 잔여횟수 있는 회원 조회 (n8n용) =====================
+
+app.get('/api/webhook/active-members', requireDB, requireApiKey, async (req, res) => {
+  const pool = getPool();
+  try {
+    const result = await pool.query(`
+      SELECT u.id, u.name, u.phone, u.email,
+        COALESCE(SUM(cp.remaining_classes), 0) as remaining_classes
+      FROM users u
+      JOIN class_passes cp ON cp.user_id = u.id AND cp.status = 'active' AND cp.remaining_classes > 0
+      WHERE u.role = 'member'
+      GROUP BY u.id, u.name, u.phone, u.email
+      HAVING COALESCE(SUM(cp.remaining_classes), 0) > 0
+    `);
+    res.json({ success: true, members: result.rows });
+  } catch (err) {
+    console.error('Active members API error:', err);
+    res.status(500).json({ error: '서버 오류' });
+  }
+});
+
+// ===================== API: 첫 출석 회원 조회 (n8n 저널링 안내용) =====================
+
+app.get('/api/webhook/first-attendance-yesterday', requireDB, requireApiKey, async (req, res) => {
+  const pool = getPool();
+  try {
+    const result = await pool.query(`
+      SELECT u.id, u.name, u.phone, u.email
+      FROM users u
+      JOIN attendance a ON a.user_id = u.id
+      WHERE u.role = 'member'
+      GROUP BY u.id, u.name, u.phone, u.email
+      HAVING COUNT(a.id) = 1
+        AND MIN(a.attended_at)::date = (CURRENT_DATE - INTERVAL '1 day')::date
+    `);
+    res.json({ success: true, members: result.rows });
+  } catch (err) {
+    console.error('First attendance API error:', err);
     res.status(500).json({ error: '서버 오류' });
   }
 });
