@@ -677,6 +677,7 @@ app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'public', 'log
 app.get('/register', (req, res) => res.redirect('/'));
 app.get('/mypage', (req, res) => res.sendFile(path.join(__dirname, 'public', 'mypage.html')));
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
+app.get('/term', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 // Health check
 app.get('/api/health', (req, res) => {
