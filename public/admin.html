@@ -37,22 +37,53 @@ nav ul li a:hover{color:var(--accent)}
 table{width:100%;border-collapse:collapse;font-size:0.8rem}
 table th{text-align:left;padding:12px 8px;border-bottom:2px solid var(--border);font-family:'Cormorant Garamond',serif;font-size:0.7rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--accent);font-weight:400}
 table td{padding:10px 8px;border-bottom:1px solid var(--border);font-weight:300;font-size:0.82rem}
+table tr.clickable{cursor:pointer;transition:background 0.2s}
+table tr.clickable:hover{background:var(--section-bg)}
 .badge{display:inline-block;padding:3px 10px;font-size:0.68rem;border-radius:2px;font-weight:400}
 .badge-pending{background:#fff8e1;color:#c49000;border:1px solid #eed88a}
 .badge-confirmed{background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7}
 .badge-active{background:#e3f2fd;color:#1565c0;border:1px solid #90caf9}
+.badge-used{background:#f3e5f5;color:#7b1fa2;border:1px solid #ce93d8}
+.badge-expired{background:#fce4ec;color:#c62828;border:1px solid #ef9a9a}
 .action-btn{padding:6px 16px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Cormorant Garamond',serif;font-size:0.72rem;letter-spacing:0.1em;cursor:pointer;transition:all 0.3s}
 .action-btn:hover{background:var(--accent);color:var(--white)}
 .action-btn.danger{border-color:#c44;color:#c44}
 .action-btn.danger:hover{background:#c44;color:var(--white)}
+.action-btn.small{padding:4px 12px;font-size:0.68rem}
 .empty-state{text-align:center;padding:40px;color:#aaa;font-size:0.85rem;font-weight:300}
 .filter-row{display:flex;gap:12px;margin-bottom:20px}
 .filter-btn{padding:6px 16px;border:1px solid var(--border);background:transparent;color:#888;font-size:0.72rem;cursor:pointer;transition:all 0.3s;font-family:'Cormorant Garamond',serif;letter-spacing:0.1em}
 .filter-btn.active{border-color:var(--accent);color:var(--accent);background:rgba(138,121,104,0.05)}
+/* Member Detail Panel */
+.detail-panel{display:none;margin-bottom:30px}
+.detail-panel.active{display:block}
+.detail-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px}
+.detail-header .back-btn{padding:8px 20px;border:1px solid var(--border);background:transparent;color:var(--text);font-family:'Noto Serif KR',serif;font-size:0.78rem;cursor:pointer;transition:all 0.3s}
+.detail-header .back-btn:hover{border-color:var(--accent);color:var(--accent)}
+.detail-info{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:24px}
+.detail-info-item{padding:16px;background:var(--section-bg);border:1px solid var(--border)}
+.detail-info-item .di-label{font-size:0.68rem;color:var(--accent);font-family:'Cormorant Garamond',serif;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:4px}
+.detail-info-item .di-value{font-size:0.9rem;font-weight:400}
+.detail-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:30px}
+.detail-stat{background:var(--white);border:1px solid var(--border);padding:20px;text-align:center}
+.detail-stat .ds-num{font-family:'Cormorant Garamond',serif;font-size:2rem;font-weight:300;color:var(--accent)}
+.detail-stat .ds-label{font-size:0.7rem;color:#888;font-weight:300;margin-top:4px}
+.detail-tabs{display:flex;gap:0;margin-bottom:20px;border-bottom:1px solid var(--border)}
+.detail-tab{padding:10px 24px;font-family:'Cormorant Garamond',serif;font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;transition:all 0.3s}
+.detail-tab.active{color:var(--text);border-bottom-color:var(--accent)}
+.detail-tab-content{display:none}
+.detail-tab-content.active{display:block}
+/* Add Credits Form */
+.add-credits-form{display:flex;gap:12px;align-items:center;margin-bottom:20px;padding:16px;background:var(--section-bg);border:1px solid var(--border)}
+.add-credits-form label{font-size:0.78rem;font-weight:400;white-space:nowrap}
+.add-credits-form input[type="number"]{width:80px;padding:8px 12px;border:1px solid var(--border);background:var(--white);font-family:'Noto Serif KR',serif;font-size:0.85rem;outline:none}
+.add-credits-form input[type="number"]:focus{border-color:var(--accent)}
+.add-credits-form input[type="text"]{flex:1;padding:8px 12px;border:1px solid var(--border);background:var(--white);font-family:'Noto Serif KR',serif;font-size:0.82rem;outline:none}
+.add-credits-form input[type="text"]:focus{border-color:var(--accent)}
 footer{padding:40px;border-top:1px solid var(--border);text-align:center;margin-top:auto}
 footer .logo-img{height:28px;width:auto;margin-bottom:8px}
 footer p{font-size:0.7rem;color:#999;font-weight:300}
-@media(max-width:768px){nav ul{display:none}nav .logo img{height:28px}.stats-grid{grid-template-columns:repeat(2,1fr)}.container{padding:40px 16px}.section-box{padding:20px}table{font-size:0.72rem}.tabs{overflow-x:auto}}
+@media(max-width:768px){nav ul{display:none}nav{padding:0 24px}nav .logo img{height:28px}.stats-grid{grid-template-columns:repeat(2,1fr)}.container{padding:40px 16px}.section-box{padding:20px}table{font-size:0.72rem}.tabs{overflow-x:auto}.detail-info{grid-template-columns:1fr}.detail-stats{grid-template-columns:1fr}.add-credits-form{flex-direction:column;align-items:stretch}}
 </style>
 </head>
 <body>
@@ -68,6 +99,9 @@ footer p{font-size:0.7rem;color:#999;font-weight:300}
 <div class="stat-card"><div class="num" id="statActive">0</div><div class="label">활성 이용권</div></div>
 <div class="stat-card"><div class="num" id="statToday">0</div><div class="label">오늘 출석</div></div>
 </div>
+
+<!-- Main List View -->
+<div id="mainView">
 <div class="tabs">
 <button class="tab active" onclick="switchTab('payments')">입금 관리</button>
 <button class="tab" onclick="switchTab('members')">회원 관리</button>
@@ -84,8 +118,46 @@ footer p{font-size:0.7rem;color:#999;font-weight:300}
 <div class="section-box"><div id="memberList"><div class="empty-state">회원이 없습니다</div></div></div>
 </div>
 </div>
+
+<!-- Member Detail View -->
+<div class="detail-panel" id="detailPanel">
+<div class="detail-header">
+<div>
+<p class="label eng" style="font-family:'Cormorant Garamond',serif;font-size:0.75rem;letter-spacing:0.35em;text-transform:uppercase;color:var(--accent);margin-bottom:8px">Member Detail</p>
+<h2 class="eng" style="font-family:'Cormorant Garamond',serif;font-size:1.8rem;font-weight:300" id="detailName"></h2>
+</div>
+<button class="detail-header .back-btn" style="padding:8px 20px;border:1px solid var(--border);background:transparent;color:var(--text);font-family:'Noto Serif KR',serif;font-size:0.78rem;cursor:pointer" onclick="closeDetail()">← 목록으로</button>
+</div>
+<div class="detail-info" id="detailInfo"></div>
+<div class="detail-stats" id="detailStats"></div>
+
+<div class="detail-tabs">
+<button class="detail-tab active" onclick="switchDetailTab('attendance')">출석 로그</button>
+<button class="detail-tab" onclick="switchDetailTab('passes')">이용권</button>
+<button class="detail-tab" onclick="switchDetailTab('payments-detail')">결제 내역</button>
+</div>
+
+<div class="detail-tab-content active" id="dtab-attendance">
+<div class="section-box"><div id="detailAttendance"><div class="empty-state">출석 기록이 없습니다</div></div></div>
+</div>
+<div class="detail-tab-content" id="dtab-passes">
+<div class="add-credits-form">
+<label>이용권 횟수 추가:</label>
+<input type="number" id="addCreditsCount" min="1" max="100" value="1" placeholder="횟수">
+<input type="text" id="addCreditsNote" placeholder="메모 (선택)">
+<button class="action-btn" onclick="addCredits()">추가</button>
+</div>
+<div class="section-box"><div id="detailPasses"><div class="empty-state">이용권이 없습니다</div></div></div>
+</div>
+<div class="detail-tab-content" id="dtab-payments-detail">
+<div class="section-box"><div id="detailPayments"><div class="empty-state">결제 내역이 없습니다</div></div></div>
+</div>
+</div>
+</div>
 <footer><img class="logo-img" src="/images/signature.png" alt="Junseong Hwang"><p>&copy; 2025 Junseong Hwang. All rights reserved.</p></footer>
 <script>
+let currentMemberId = null;
+
 async function checkAuth() {
   const res = await fetch('/api/me');
   const data = await res.json();
@@ -93,11 +165,13 @@ async function checkAuth() {
   if (data.user.role !== 'admin') { window.location.href = '/mypage'; return; }
   loadDashboard();
 }
+
 async function loadDashboard() {
   loadStats();
   loadPayments('all');
   loadMembers();
 }
+
 async function loadStats() {
   try {
     const res = await fetch('/api/admin/stats');
@@ -108,6 +182,7 @@ async function loadStats() {
     document.getElementById('statToday').textContent = data.todayAttendance;
   } catch (err) { console.error(err); }
 }
+
 async function loadPayments(status) {
   try {
     const res = await fetch('/api/admin/payments?status=' + status);
@@ -134,6 +209,7 @@ async function loadPayments(status) {
     document.getElementById('paymentList').innerHTML = html;
   } catch (err) { console.error(err); }
 }
+
 async function loadMembers() {
   try {
     const res = await fetch('/api/admin/members');
@@ -145,12 +221,159 @@ async function loadMembers() {
     let html = '<table><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Remaining</th><th>Attended</th><th>Joined</th><th>Action</th></tr></thead><tbody>';
     data.members.forEach(m => {
       const date = new Date(m.created_at).toLocaleDateString('ko-KR');
-      html += '<tr><td>' + m.name + '</td><td>' + m.email + '</td><td>' + m.phone + '</td><td><strong>' + m.remaining_classes + '회</strong></td><td>' + m.total_attended + '회</td><td>' + date + '</td><td><button class="action-btn" onclick="markAttend(' + m.id + ')">출석</button></td></tr>';
+      html += '<tr class="clickable" onclick="openMemberDetail(' + m.id + ')"><td><strong>' + m.name + '</strong></td><td>' + m.email + '</td><td>' + m.phone + '</td><td><strong>' + m.remaining_classes + '회</strong></td><td>' + m.total_attended + '회</td><td>' + date + '</td><td><button class="action-btn small" onclick="event.stopPropagation();markAttend(' + m.id + ')">출석</button></td></tr>';
     });
     html += '</tbody></table>';
     document.getElementById('memberList').innerHTML = html;
   } catch (err) { console.error(err); }
 }
+
+// ========== Member Detail ==========
+
+async function openMemberDetail(userId) {
+  currentMemberId = userId;
+  try {
+    const res = await fetch('/api/admin/members/' + userId);
+    const data = await res.json();
+    if (data.error) { alert(data.error); return; }
+
+    // Hide main, show detail
+    document.getElementById('mainView').style.display = 'none';
+    document.getElementById('detailPanel').classList.add('active');
+
+    // Header
+    document.getElementById('detailName').textContent = data.user.name;
+
+    // Info
+    const joined = new Date(data.user.created_at).toLocaleDateString('ko-KR');
+    document.getElementById('detailInfo').innerHTML =
+      '<div class="detail-info-item"><div class="di-label">Email</div><div class="di-value">' + data.user.email + '</div></div>' +
+      '<div class="detail-info-item"><div class="di-label">Phone</div><div class="di-value">' + data.user.phone + '</div></div>' +
+      '<div class="detail-info-item"><div class="di-label">Joined</div><div class="di-value">' + joined + '</div></div>';
+
+    // Stats
+    document.getElementById('detailStats').innerHTML =
+      '<div class="detail-stat"><div class="ds-num">' + data.stats.total_remaining + '</div><div class="ds-label">잔여 횟수</div></div>' +
+      '<div class="detail-stat"><div class="ds-num">' + data.stats.total_attended + '</div><div class="ds-label">총 출석</div></div>' +
+      '<div class="detail-stat"><div class="ds-num">' + data.stats.active_passes + '</div><div class="ds-label">활성 이용권</div></div>';
+
+    // Attendance Log
+    renderAttendanceLog(data.attendance);
+
+    // Passes
+    renderPasses(data.passes);
+
+    // Payments
+    renderPaymentsDetail(data.payments);
+
+    // Reset to first detail tab
+    switchDetailTab('attendance');
+
+  } catch (err) {
+    console.error(err);
+    alert('회원 정보를 불러올 수 없습니다');
+  }
+}
+
+function renderAttendanceLog(attendance) {
+  if (!attendance || attendance.length === 0) {
+    document.getElementById('detailAttendance').innerHTML = '<div class="empty-state">출석 기록이 없습니다</div>';
+    return;
+  }
+  let html = '<table><thead><tr><th>#</th><th>Date</th><th>Time</th><th>Note</th></tr></thead><tbody>';
+  attendance.forEach((a, i) => {
+    const dt = new Date(a.attended_at);
+    const date = dt.toLocaleDateString('ko-KR');
+    const time = dt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+    const note = a.note || '-';
+    html += '<tr><td>' + (i + 1) + '</td><td>' + date + '</td><td>' + time + '</td><td style="font-size:0.76rem;color:#888">' + note + '</td></tr>';
+  });
+  html += '</tbody></table>';
+  document.getElementById('detailAttendance').innerHTML = html;
+}
+
+function renderPasses(passes) {
+  if (!passes || passes.length === 0) {
+    document.getElementById('detailPasses').innerHTML = '<div class="empty-state">이용권이 없습니다</div>';
+    return;
+  }
+  let html = '<table><thead><tr><th>ID</th><th>Total</th><th>Remaining</th><th>Status</th><th>Purchased</th><th>Expires</th></tr></thead><tbody>';
+  passes.forEach(p => {
+    const purchased = new Date(p.purchased_at).toLocaleDateString('ko-KR');
+    const expires = p.expires_at ? new Date(p.expires_at).toLocaleDateString('ko-KR') : '-';
+    let badgeClass = 'badge-active';
+    let statusLabel = p.status;
+    if (p.status === 'active') { badgeClass = 'badge-active'; statusLabel = '활성'; }
+    else if (p.status === 'used') { badgeClass = 'badge-used'; statusLabel = '소진'; }
+    else if (p.status === 'expired') { badgeClass = 'badge-expired'; statusLabel = '만료'; }
+    html += '<tr><td>' + p.id + '</td><td>' + p.total_classes + '회</td><td><strong>' + p.remaining_classes + '회</strong></td><td><span class="badge ' + badgeClass + '">' + statusLabel + '</span></td><td>' + purchased + '</td><td>' + expires + '</td></tr>';
+  });
+  html += '</tbody></table>';
+  document.getElementById('detailPasses').innerHTML = html;
+}
+
+function renderPaymentsDetail(payments) {
+  if (!payments || payments.length === 0) {
+    document.getElementById('detailPayments').innerHTML = '<div class="empty-state">결제 내역이 없습니다</div>';
+    return;
+  }
+  let html = '<table><thead><tr><th>Date</th><th>Amount</th><th>Depositor</th><th>Status</th><th>Confirmed</th></tr></thead><tbody>';
+  payments.forEach(p => {
+    const date = new Date(p.created_at).toLocaleDateString('ko-KR');
+    const badge = p.status === 'confirmed' ? 'badge-confirmed' : 'badge-pending';
+    const label = p.status === 'confirmed' ? '확인완료' : p.status === 'underpaid' ? '부족' : '대기';
+    const confirmed = p.confirmed_at ? new Date(p.confirmed_at).toLocaleDateString('ko-KR') : '-';
+    html += '<tr><td>' + date + '</td><td>' + p.amount.toLocaleString() + '원</td><td>' + (p.depositor_name || '-') + '</td><td><span class="badge ' + badge + '">' + label + '</span></td><td>' + confirmed + '</td></tr>';
+  });
+  html += '</tbody></table>';
+  document.getElementById('detailPayments').innerHTML = html;
+}
+
+async function addCredits() {
+  if (!currentMemberId) return;
+  const credits = parseInt(document.getElementById('addCreditsCount').value);
+  const note = document.getElementById('addCreditsNote').value;
+  if (!credits || credits < 1) { alert('추가할 횟수를 입력해주세요'); return; }
+  if (!confirm(credits + '회를 추가하시겠습니까?')) return;
+
+  try {
+    const res = await fetch('/api/admin/members/' + currentMemberId + '/add-credits', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ credits, note })
+    });
+    const data = await res.json();
+    if (data.success) {
+      alert(data.added + '회가 추가되었습니다. 현재 잔여: ' + data.total_remaining + '회');
+      document.getElementById('addCreditsCount').value = '1';
+      document.getElementById('addCreditsNote').value = '';
+      openMemberDetail(currentMemberId);
+      loadStats();
+    } else {
+      alert(data.error || '오류가 발생했습니다');
+    }
+  } catch (err) {
+    alert('오류가 발생했습니다');
+  }
+}
+
+function closeDetail() {
+  currentMemberId = null;
+  document.getElementById('detailPanel').classList.remove('active');
+  document.getElementById('mainView').style.display = 'block';
+  loadMembers();
+  loadStats();
+}
+
+function switchDetailTab(tab) {
+  document.querySelectorAll('.detail-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.detail-tab-content').forEach(t => t.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('dtab-' + tab).classList.add('active');
+}
+
+// ========== Main Actions ==========
+
 async function confirmPayment(id) {
   if (!confirm('입금을 확인하고 이용권을 활성화하시겠습니까?')) return;
   try {
@@ -160,6 +383,7 @@ async function confirmPayment(id) {
     else { alert(data.error); }
   } catch (err) { alert('오류가 발생했습니다'); }
 }
+
 async function markAttend(userId) {
   if (!confirm('해당 회원의 출석을 처리하시겠습니까? (잔여 횟수 -1)')) return;
   try {
@@ -173,21 +397,25 @@ async function markAttend(userId) {
     else { alert(data.error); }
   } catch (err) { alert('오류가 발생했습니다'); }
 }
+
 function switchTab(tab) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
   event.target.classList.add('active');
   document.getElementById('tab-' + tab).classList.add('active');
 }
+
 function filterPayments(status, btn) {
   document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   loadPayments(status);
 }
+
 async function logout() {
   await fetch('/api/logout', { method: 'POST' });
   window.location.href = '/';
 }
+
 checkAuth();
 </script>
 </body>
