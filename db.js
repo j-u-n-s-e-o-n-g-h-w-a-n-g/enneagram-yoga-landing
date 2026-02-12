@@ -130,6 +130,17 @@ async function initDB() {
       );
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_journaling_sms_user_pass ON journaling_sms_log (user_id, class_pass_id);`);
+    // Care SMS log (만료임박/미참석독려/재등록권유 SMS 발송 이력)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS care_sms_log (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        class_pass_id INTEGER REFERENCES class_passes(id) ON DELETE CASCADE,
+        sms_type VARCHAR(30) NOT NULL,
+        sent_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_care_sms_user_pass ON care_sms_log (user_id, class_pass_id, sms_type);`);
     dbReady = true;
     console.log('✅ Database tables initialized successfully');
   } catch (err) {
