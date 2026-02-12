@@ -70,10 +70,12 @@ footer{padding:40px;border-top:1px solid var(--border);text-align:center;margin-
 footer .logo-img{height:28px;width:auto;margin-bottom:8px}
 footer p{font-size:0.7rem;color:#999;font-weight:300}
 @media(max-width:768px){nav ul{display:none}nav .logo img{height:28px}.stats-grid{grid-template-columns:repeat(2,1fr)}.container{padding:40px 20px}.section-box{padding:24px}}
+.hamburger{display:none;background:none;border:none;font-size:1.5rem;color:var(--text);cursor:pointer}
+@media(max-width:768px){.hamburger{display:block}nav ul{display:none;position:absolute;top:100%;left:0;right:0;background:var(--white);border-bottom:1px solid var(--border);padding:20px;flex-direction:column;gap:12px}nav ul.open{display:flex}}
 </style>
 </head>
 <body>
-<nav><div class="inner"><a href="/" class="logo"><img src="/images/signature.png" alt="Junseong Hwang"></a><ul><li><a href="/">Home</a></li><li><a onclick="logout()">Logout</a></li></ul></div></nav>
+<nav><div class="inner"><a href="/" class="logo"><img src="/images/signature.png" alt="Junseong Hwang"></a><ul><li><a href="/">Home</a></li><li><a onclick="logout()">Logout</a></li></ul><button class="hamburger" onclick="toggleMenu()">&#9776;</button></div></nav>
 <div class="container">
 <div class="page-header">
 <p class="label eng">My Page</p>
@@ -123,7 +125,7 @@ footer p{font-size:0.7rem;color:#999;font-weight:300}
 <div id="attendanceList"><div class="empty-state">출석 기록이 없습니다</div></div>
 </div>
 </div>
-<footer><img class="logo-img" src="/images/signature.png" alt="Junseong Hwang"><p>&copy; 2025 Junseong Hwang. All rights reserved.</p></footer>
+<footer><img class="logo-img" src="/images/signature.png" alt="Junseong Hwang"><p>&copy; 2026 Junseong Hwang. All rights reserved.</p></footer>
 <script>
 async function checkAuth() {
   const res = await fetch('/api/me');
@@ -285,6 +287,7 @@ async function logout() {
   await fetch('/api/logout', { method: 'POST' });
   window.location.href = '/';
 }
+function toggleMenu(){document.querySelector('nav ul').classList.toggle('open');}
 checkAuth();
 </script>
 </body>
