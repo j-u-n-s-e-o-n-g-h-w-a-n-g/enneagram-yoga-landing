@@ -75,6 +75,8 @@ async function initDB() {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
+    await client.query("ALTER TABLE payments ADD COLUMN IF NOT EXISTS transaction_id VARCHAR(255)");
+    await client.query("CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_transaction_id ON payments (transaction_id) WHERE transaction_id IS NOT NULL");
     await client.query(`
       CREATE TABLE IF NOT EXISTS attendance (
         id SERIAL PRIMARY KEY,
