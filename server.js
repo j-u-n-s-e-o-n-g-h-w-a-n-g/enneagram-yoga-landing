@@ -130,7 +130,7 @@ app.post('/api/webhook/payment-confirm', requireDB, requireApiKey, async (req, r
       return res.status(400).json({ error: '입금자명, 전화번호, 이메일 중 하나 이상 필요합니다' });
     }
 
-    // ===== 먱등성 체크: transaction_id가 있으면 중복 확인 =====
+    // ===== 멱등성 체크: transaction_id가 있으면 중복 확인 =====
     if (transaction_id) {
       const dupCheck = await client.query(
         "SELECT id FROM payments WHERE transaction_id = $1",
@@ -496,6 +496,89 @@ app.post('/api/webhook/journaling-sms-log', requireDB, requireApiKey, async (req
     res.json({ success: true, log: result.rows[0] });
   } catch (err) {
     console.error('Journaling SMS log error:', err);
+    res.status(500).json({ error: '서버 오류' });
+  }
+});
+
+// ===================== CARE SMS TARGETS (n8n 전용) =====================
+
+app.get('/api/webhook/care-sms-targets', requireDB, requireApiKey, async (req, res) => {
+  const pool = getPool();
+  try {
+    const result = await pool.query(`
+      -- 1) 만료 7일 이내 (이용권당 1회)
+      SELECT u.id AS user_id, u.name, u.phone, u.email,
+             cp.id AS class_pass_id, cp.remaining_classes, cp.expires_at,
+             'expiring_7d' AS sms_type
+      FROM class_passes cp
+      JOIN users u ON u.id = cp.user_id
+      WHERE cp.status = 'active'
+        AND cp.expires_at BETWEEN NOW() AND NOW() + INTERVAL '7 days'
+        AND u.role = 'member'
+        AND NOT EXISTS (
+          SELECT 1 FROM care_sms_log csl
+          WHERE csl.user_id = u.id AND csl.class_pass_id = cp.id AND csl.sms_type = 'expiring_7d'
+        )
+
+      UNION ALL
+
+      -- 2) 7일 이상 미참석 (14일 간격)
+      SELECT u.id AS user_id, u.name, u.phone, u.email,
+             cp.id AS class_pass_id, cp.remaining_classes, cp.expires_at,
+             'inactive_7d' AS sms_type
+      FROM users u
+      JOIN class_passes cp ON cp.user_id = u.id AND cp.status = 'active' AND cp.remaining_classes > 0
+      WHERE u.role = 'member'
+        AND EXISTS (
+          SELECT 1 FROM attendance a2 WHERE a2.user_id = u.id
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM attendance a WHERE a.user_id = u.id AND a.attended_at >= NOW() - INTERVAL '7 days'
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM care_sms_log csl
+          WHERE csl.user_id = u.id AND csl.class_pass_id = cp.id AND csl.sms_type = 'inactive_7d'
+            AND csl.sent_at >= NOW() - INTERVAL '14 days'
+        )
+
+      UNION ALL
+
+      -- 3) 잔여 1회 (이용권당 1회)
+      SELECT u.id AS user_id, u.name, u.phone, u.email,
+             cp.id AS class_pass_id, cp.remaining_classes, cp.expires_at,
+             'renewal_1left' AS sms_type
+      FROM class_passes cp
+      JOIN users u ON u.id = cp.user_id
+      WHERE cp.status = 'active' AND cp.remaining_classes = 1
+        AND u.role = 'member'
+        AND NOT EXISTS (
+          SELECT 1 FROM care_sms_log csl
+          WHERE csl.user_id = u.id AND csl.class_pass_id = cp.id AND csl.sms_type = 'renewal_1left'
+        )
+    `);
+    res.json({ success: true, targets: result.rows });
+  } catch (err) {
+    console.error('Care SMS targets API error:', err);
+    res.status(500).json({ error: '서버 오류' });
+  }
+});
+
+// ===================== CARE SMS LOG (n8n 전용) =====================
+
+app.post('/api/webhook/care-sms-log', requireDB, requireApiKey, async (req, res) => {
+  const pool = getPool();
+  try {
+    const { user_id, class_pass_id, sms_type } = req.body;
+    if (!user_id || !class_pass_id || !sms_type) {
+      return res.status(400).json({ error: 'user_id, class_pass_id, sms_type 필수' });
+    }
+    const result = await pool.query(
+      'INSERT INTO care_sms_log (user_id, class_pass_id, sms_type) VALUES ($1, $2, $3) RETURNING *',
+      [user_id, class_pass_id, sms_type]
+    );
+    res.json({ success: true, log: result.rows[0] });
+  } catch (err) {
+    console.error('Care SMS log error:', err);
     res.status(500).json({ error: '서버 오류' });
   }
 });
