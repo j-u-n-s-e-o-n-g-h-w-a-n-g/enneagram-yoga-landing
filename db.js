@@ -81,8 +81,13 @@ async function initDB() {
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
         class_pass_id INTEGER REFERENCES class_passes(id) ON DELETE SET NULL,
         attended_at TIMESTAMP DEFAULT NOW(),
-        note VARCHAR(255)
+        note VARCHAR(255),
+        zoom_meeting_uuid VARCHAR(255)
       );
+    `);
+    // Add zoom_meeting_uuid column if not exists (for existing tables)
+    await client.query(`
+      ALTER TABLE attendance ADD COLUMN IF NOT EXISTS zoom_meeting_uuid VARCHAR(255);
     `);
     await client.query(`
       CREATE TABLE IF NOT EXISTS session (
