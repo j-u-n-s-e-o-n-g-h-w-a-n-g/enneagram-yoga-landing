@@ -188,9 +188,14 @@ footer p{font-size:0.72rem;color:#999;font-weight:300}
 <span class="bi-row"><a href="#" onclick="openTermsModal(event)">이용약관</a></span><span class="bi-sep">|</span>
 <span class="bi-row">통신판매신고번호: 제2025-제주대륜-0029호</span>
 </div>
-<p>&copy; 2025 Junseong Hwang. All rights reserved.</p>
+<p>&copy; 2026 Junseong Hwang. All rights reserved.</p>
 </footer>
 <script>
+let siteConfig = {};
+async function loadConfig(){
+  try{const r=await fetch('/api/config');siteConfig=await r.json();}catch(e){console.log('Config load failed, using defaults');}
+}
+loadConfig();
 const GOOGLE_SCRIPT_URL='https://script.google.com/macros/s/AKfycbzIGDQrUyjyez0-QrzO0WiLi3LyXlRbALUnGTDSm9nVi5JzHSpXQuhgfrNiDmIrAHbn/exec';
 document.getElementById('privacyConsent').addEventListener('change',function(){document.getElementById('submitBtn').disabled=!this.checked});
 function handleSubmit(e){e.preventDefault();if(!document.getElementById('privacyConsent').checked){alert('개인정보 수집 및 이용에 동의해주세요.');return false}const name=document.getElementById('userName').value;const phone=document.getElementById('userPhone').value;const email=document.getElementById('userEmail').value;
