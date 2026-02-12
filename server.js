@@ -103,7 +103,7 @@ app.post('/api/webhook/payment-confirm', requireDB, requireApiKey, async (req, r
       return res.status(400).json({ error: '입금자명, 전화번호, 이메일 중 하나 이상 필요합니다' });
     }
 
-    const paidAmount = parseInt(amount) || 0;
+    let paidAmount = parseInt(amount) || 0;
     const expectedAmount = 99000;
 
     // 1. Find matching application
@@ -134,25 +134,73 @@ app.post('/api/webhook/payment-confirm', requireDB, requireApiKey, async (req, r
 
     const application = appResult.rows[0];
 
-    // 2. Check amount - underpaid
+    // 2. Check amount - underpaid (이전 부분입금 합산)
     if (paidAmount > 0 && paidAmount < expectedAmount) {
-      const shortage = expectedAmount - paidAmount;
-      // Record partial payment but don't activate pass
-      await client.query(
-        "INSERT INTO payments (user_id, amount, depositor_name, status, confirmed_at) VALUES ((SELECT id FROM users WHERE email = $1 LIMIT 1), $2, $3, 'underpaid', NOW())",
-        [application.email, paidAmount, depositor_name || application.name]
-      );
-      await client.query('COMMIT');
-      return res.json({
-        success: false,
-        status: 'underpaid',
-        paid_amount: paidAmount,
-        expected_amount: expectedAmount,
-        shortage: shortage,
-        user_name: application.name,
-        user_phone: application.phone,
-        message: paidAmount.toLocaleString() + '원이 입금되어 ' + shortage.toLocaleString() + '원이 부족합니다. 농협 312-0025-5524-11 (황준성) 계좌로 차액을 추가 입금해주세요.'
-      });
+      // 이전 underpaid 결제 금액 합산 (같은 이메일의 underpaid 기록)
+      // user_id가 아직 없을 수 있으므로 (첫 부분입금) depositor_name + application 기반으로도 조회
+      const existingUserForCheck = await client.query('SELECT id FROM users WHERE email = $1 LIMIT 1', [application.email]);
+      const existingUserId = existingUserForCheck.rows.length > 0 ? existingUserForCheck.rows[0].id : null;
+
+      let previousTotal = 0;
+      if (existingUserId) {
+        const prevPayments = await client.query(
+          "SELECT COALESCE(SUM(amount), 0) as total_prev FROM payments WHERE user_id = $1 AND status = 'underpaid'",
+          [existingUserId]
+        );
+        previousTotal = parseInt(prevPayments.rows[0].total_prev) || 0;
+      } else {
+        // 회원이 아직 없는 경우 → user_id=NULL이고 depositor_name이 같은 underpaid 기록 조회
+        const prevPayments = await client.query(
+          "SELECT COALESCE(SUM(amount), 0) as total_prev FROM payments WHERE user_id IS NULL AND depositor_name = $1 AND status = 'underpaid'",
+          [depositor_name || application.name]
+        );
+        previousTotal = parseInt(prevPayments.rows[0].total_prev) || 0;
+      }
+      const totalPaid = previousTotal + paidAmount;
+
+      if (totalPaid >= expectedAmount) {
+        // 합산 금액이 충분 → 이전 underpaid 기록들을 confirmed로 변경하고 정상 처리
+        if (existingUserId) {
+          await client.query(
+            "UPDATE payments SET status = 'confirmed', confirmed_at = NOW() WHERE user_id = $1 AND status = 'underpaid'",
+            [existingUserId]
+          );
+        } else {
+          // user_id=NULL인 이전 underpaid 기록들도 confirmed로 변경
+          await client.query(
+            "UPDATE payments SET status = 'confirmed', confirmed_at = NOW() WHERE user_id IS NULL AND depositor_name = $1 AND status = 'underpaid'",
+            [depositor_name || application.name]
+          );
+        }
+        // paidAmount를 totalPaid로 재설정하여 아래 정상 플로우에서 사용
+        paidAmount = totalPaid;
+      } else {
+        // 합산해도 부족 → underpaid 기록 후 반환
+        const shortage = expectedAmount - totalPaid;
+        if (existingUserId) {
+          await client.query(
+            "INSERT INTO payments (user_id, amount, depositor_name, status, confirmed_at) VALUES ($1, $2, $3, 'underpaid', NOW())",
+            [existingUserId, paidAmount, depositor_name || application.name]
+          );
+        } else {
+          // 아직 회원이 없는 경우 → user_id NULL로 기록, application_id 참조
+          await client.query(
+            "INSERT INTO payments (user_id, amount, depositor_name, status, confirmed_at) VALUES (NULL, $1, $2, 'underpaid', NOW())",
+            [paidAmount, depositor_name || application.name]
+          );
+        }
+        await client.query('COMMIT');
+        return res.json({
+          success: false,
+          status: 'underpaid',
+          paid_amount: totalPaid,
+          expected_amount: expectedAmount,
+          shortage: shortage,
+          user_name: application.name,
+          user_phone: application.phone,
+          message: '총 ' + totalPaid.toLocaleString() + '원이 입금되어 ' + shortage.toLocaleString() + '원이 부족합니다. 농협 312-0025-5524-11 (황준성) 계좌로 차액을 추가 입금해주세요.'
+        });
+      }
     }
 
     // 3. Check for existing user
