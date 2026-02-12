@@ -38,11 +38,12 @@ nav ul li a:hover{color:var(--accent)}
 footer{padding:40px;border-top:1px solid var(--border);text-align:center}
 footer .logo-img{height:28px;width:auto;margin-bottom:8px}
 footer p{font-size:0.7rem;color:#999;font-weight:300}
-@media(max-width:768px){nav ul{display:none}nav .logo img{height:28px}.auth-box{padding:40px 24px}}
+.hamburger{display:none;background:none;border:none;font-size:1.5rem;color:var(--text);cursor:pointer}
+@media(max-width:768px){.hamburger{display:block}nav ul{display:none;position:absolute;top:100%;left:0;right:0;background:var(--white);border-bottom:1px solid var(--border);padding:20px;flex-direction:column;gap:12px}nav ul.open{display:flex}nav .logo img{height:28px}.auth-box{padding:40px 24px}}
 </style>
 </head>
 <body>
-<nav><div class="inner"><a href="/" class="logo"><img src="/images/signature.png" alt="Junseong Hwang"></a><ul><li><a href="/">Home</a></li></ul></div></nav>
+<nav><div class="inner"><a href="/" class="logo"><img src="/images/signature.png" alt="Junseong Hwang"></a><ul><li><a href="/">Home</a></li></ul><button class="hamburger" onclick="toggleMenu()">&#9776;</button></div></nav>
 <div class="container">
 <div class="auth-box">
 <h2 class="eng">Sign In</h2>
@@ -54,10 +55,20 @@ footer p{font-size:0.7rem;color:#999;font-weight:300}
 <div class="form-group"><label class="eng">Password</label><input type="password" id="password" placeholder="비밀번호" required></div>
 <button type="submit" class="submit-btn eng">Sign In</button>
 </form>
-<div class="auth-links"><a href="/">홈으로 돌아가기</a></div>
+<div style="text-align:center;margin-top:20px;padding-top:20px;border-top:1px solid var(--border)">
+<p style="font-size:0.78rem;color:#888;margin-bottom:12px">비밀번호를 잊으셨나요?</p>
+<div id="resetForm" style="display:none">
+<input type="email" id="resetEmail" placeholder="가입시 이메일" style="width:100%;padding:12px;margin-bottom:8px;border:1px solid var(--border);font-family:'Noto Serif KR',serif;font-size:0.85rem;outline:none;box-sizing:border-box">
+<input type="tel" id="resetPhone" placeholder="가입시 전화번호 (01012345678)" style="width:100%;padding:12px;margin-bottom:12px;border:1px solid var(--border);font-family:'Noto Serif KR',serif;font-size:0.85rem;outline:none;box-sizing:border-box">
+<button type="button" onclick="resetPassword()" style="width:100%;padding:12px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-family:'Cormorant Garamond',serif;font-size:0.85rem;letter-spacing:0.15em;cursor:pointer">임시 비밀번호 발급</button>
+<p id="resetMsg" style="margin-top:8px;font-size:0.78rem;color:#888"></p>
+</div>
+<button type="button" onclick="document.getElementById('resetForm').style.display=document.getElementById('resetForm').style.display==='none'?'block':'none'" style="background:none;border:none;color:var(--accent);font-size:0.78rem;cursor:pointer;text-decoration:underline">비밀번호 재설정</button>
+</div>
+<div class="auth-links"><span style="font-size:0.78rem;color:#888">결제 완료 후 SMS로 받은 비밀번호로 로그인해주세요</span></div>
 </div>
 </div>
-<footer><img class="logo-img" src="/images/signature.png" alt="Junseong Hwang"><p>&copy; 2025 Junseong Hwang. All rights reserved.</p></footer>
+<footer><img class="logo-img" src="/images/signature.png" alt="Junseong Hwang"><p>&copy; 2026 Junseong Hwang. All rights reserved.</p></footer>
 <script>
 document.getElementById('loginForm').addEventListener('submit', async function(e) {
   e.preventDefault();
@@ -85,6 +96,20 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
     errorMsg.style.display = 'block';
   }
 });
+function toggleMenu(){document.querySelector('nav ul').classList.toggle('open');}
+async function resetPassword(){
+  const email=document.getElementById('resetEmail').value;
+  const phone=document.getElementById('resetPhone').value;
+  const msg=document.getElementById('resetMsg');
+  if(!email||!phone){msg.textContent='이메일과 전화번호를 입력해주세요';msg.style.color='#c44';return;}
+  msg.textContent='처리 중...';msg.style.color='#888';
+  try{
+    const res=await fetch('/api/reset-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,phone})});
+    const data=await res.json();
+    if(data.success){msg.textContent='임시 비밀번호가 SMS로 발송되었습니다.';msg.style.color='#2e7d32';}
+    else{msg.textContent=data.error||'오류가 발생했습니다';msg.style.color='#c44';}
+  }catch(err){msg.textContent='오류가 발생했습니다';msg.style.color='#c44';}
+}
 </script>
 </body>
 </html>
