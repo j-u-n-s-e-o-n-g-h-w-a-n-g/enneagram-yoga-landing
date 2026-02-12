@@ -229,6 +229,122 @@ app.post('/api/webhook/payment-confirm', requireDB, requireApiKey, async (req, r
   }
 });
 
+// ===================== ZOOM ATTENDANCE WEBHOOK (n8n 전용) =====================
+
+app.post('/api/webhook/zoom-attendance', requireDB, requireApiKey, async (req, res) => {
+  const pool = getPool();
+  const client = await pool.connect();
+  try {
+    const { meeting_uuid, meeting_topic, participants } = req.body;
+    if (!meeting_uuid || !participants || !Array.isArray(participants)) {
+      return res.status(400).json({ error: 'meeting_uuid와 participants 배열이 필요합니다' });
+    }
+
+    const results = {
+      processed: [],   // 출석 처리 완료
+      already_done: [], // 이미 처리됨 (중복 방지)
+      no_pass: [],      // 이용권 없음
+      not_found: [],    // DB에 없는 이메일
+      host_skipped: []  // 호스트 스킵
+    };
+
+    for (const participant of participants) {
+      const email = (participant.email || '').toLowerCase().trim();
+      if (!email) continue;
+
+      // 호스트(강사) 스킵
+      if (email === 'junseong@junseonghwang.com') {
+        results.host_skipped.push(email);
+        continue;
+      }
+
+      // 1. 이메일로 회원 조회
+      const userResult = await client.query(
+        'SELECT id, name, email FROM users WHERE LOWER(email) = $1',
+        [email]
+      );
+      if (userResult.rows.length === 0) {
+        results.not_found.push({ email, name: participant.name || '' });
+        continue;
+      }
+
+      const user = userResult.rows[0];
+
+      // 2. 이 미팅 UUID로 이미 출석 처리했는지 확인 (중복 방지)
+      const dupCheck = await client.query(
+        'SELECT id FROM attendance WHERE user_id = $1 AND zoom_meeting_uuid = $2',
+        [user.id, meeting_uuid]
+      );
+      if (dupCheck.rows.length > 0) {
+        results.already_done.push({ email, name: user.name });
+        continue;
+      }
+
+      // 3. 활성 이용권 확인
+      const passResult = await client.query(
+        "SELECT * FROM class_passes WHERE user_id = $1 AND status = 'active' AND remaining_classes > 0 ORDER BY purchased_at ASC LIMIT 1",
+        [user.id]
+      );
+      if (passResult.rows.length === 0) {
+        results.no_pass.push({ email, name: user.name, user_id: user.id });
+        continue;
+      }
+
+      const pass = passResult.rows[0];
+
+      // 4. 출석 차감 처리 (트랜잭션)
+      await client.query('BEGIN');
+      try {
+        // 잔여 횟수 차감
+        await client.query(
+          'UPDATE class_passes SET remaining_classes = remaining_classes - 1 WHERE id = $1',
+          [pass.id]
+        );
+        // 0이 되면 상태 변경
+        if (pass.remaining_classes - 1 <= 0) {
+          await client.query("UPDATE class_passes SET status = 'used' WHERE id = $1", [pass.id]);
+        }
+        // 출석 기록 추가
+        await client.query(
+          'INSERT INTO attendance (user_id, class_pass_id, zoom_meeting_uuid, note) VALUES ($1, $2, $3, $4)',
+          [user.id, pass.id, meeting_uuid, 'Zoom 자동출석: ' + (meeting_topic || '')]
+        );
+        await client.query('COMMIT');
+
+        results.processed.push({
+          email,
+          name: user.name,
+          user_id: user.id,
+          remaining: pass.remaining_classes - 1
+        });
+      } catch (txErr) {
+        await client.query('ROLLBACK');
+        console.error('Zoom attendance transaction error for', email, txErr);
+      }
+    }
+
+    res.json({
+      success: true,
+      meeting_uuid,
+      meeting_topic: meeting_topic || '',
+      summary: {
+        total_participants: participants.length,
+        processed: results.processed.length,
+        already_done: results.already_done.length,
+        no_pass: results.no_pass.length,
+        not_found: results.not_found.length,
+        host_skipped: results.host_skipped.length
+      },
+      details: results
+    });
+  } catch (err) {
+    console.error('Zoom attendance webhook error:', err);
+    res.status(500).json({ error: '서버 오류가 발생했습니다' });
+  } finally {
+    client.release();
+  }
+});
+
 // ===================== BACKUP API (n8n 전용) =====================
 
 app.get('/api/webhook/backup', requireDB, requireApiKey, async (req, res) => {
