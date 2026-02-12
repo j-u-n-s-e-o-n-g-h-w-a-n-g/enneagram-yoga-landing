@@ -276,7 +276,7 @@ app.post('/api/register', requireDB, async (req, res) => {
     if (existing.rows.length > 0) return res.status(400).json({ error: '이미 가입된 이메일입니다' });
     const hashed = await bcrypt.hash(password, 10);
     const result = await pool.query(
-      'INSERT INTO users (name, email, password) VALUES ($1, $2, $3, $4) RETURNING id, name, email, role',
+      'INSERT INTO users (name, email, phone, password) VALUES ($1, $2, $3, $4) RETURNING id, name, email, role',
       [name, email, phone, hashed]
     );
     const user = result.rows[0];
