@@ -39,10 +39,13 @@ nav ul li a:hover{color:var(--accent)}
 .pw-change-form .pw-msg{font-size:0.78rem;margin-top:12px;font-weight:300}
 .pw-change-form .pw-msg.success{color:#2e7d32}
 .pw-change-form .pw-msg.error{color:#c44}
-.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-bottom:50px}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:24px;margin-bottom:50px}
 .stat-card{background:var(--white);border:1px solid var(--border);padding:30px;text-align:center;transition:border-color 0.3s}
 .stat-card:hover{border-color:var(--accent)}
 .stat-card .num{font-family:'Cormorant Garamond',serif;font-size:2.8rem;font-weight:300;color:var(--accent);line-height:1}
+.stat-card .num.small-text{font-size:1rem;font-weight:300;color:var(--accent);line-height:2.8}
+.stat-card .num.expiry-warning{color:#c49000}
+.stat-card .num.expiry-danger{color:#c44}
 .stat-card .label{font-size:0.72rem;color:#888;margin-top:8px;font-weight:300}
 .section-box{background:var(--white);border:1px solid var(--border);padding:40px;margin-bottom:30px}
 .section-box h3{font-family:'Cormorant Garamond',serif;font-size:1.3rem;font-weight:300;letter-spacing:0.05em;margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid var(--border)}
@@ -56,13 +59,17 @@ table td{padding:12px 8px;border-bottom:1px solid var(--border);font-weight:300}
 .badge-confirmed{background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7}
 .badge-active{background:#e3f2fd;color:#1565c0;border:1px solid #90caf9}
 .badge-used{background:#f5f5f5;color:#888;border:1px solid #ddd}
+.badge-expired{background:#fce4ec;color:#c62828;border:1px solid #ef9a9a}
 .empty-state{text-align:center;padding:40px;color:#aaa;font-size:0.85rem;font-weight:300}
 .bank-info-box{background:var(--section-bg);padding:20px;margin-top:16px;font-size:0.82rem;line-height:2;font-weight:300;display:none}
 .bank-info-box strong{font-weight:500}
+.pass-table .expiry-cell{font-size:0.78rem}
+.pass-table .expiry-cell.near{color:#c49000;font-weight:400}
+.pass-table .expiry-cell.expired{color:#c44;font-weight:400}
 footer{padding:40px;border-top:1px solid var(--border);text-align:center;margin-top:auto}
 footer .logo-img{height:28px;width:auto;margin-bottom:8px}
 footer p{font-size:0.7rem;color:#999;font-weight:300}
-@media(max-width:768px){nav ul{display:none}nav .logo img{height:28px}.stats-grid{grid-template-columns:1fr}.container{padding:40px 20px}.section-box{padding:24px}}
+@media(max-width:768px){nav ul{display:none}nav .logo img{height:28px}.stats-grid{grid-template-columns:repeat(2,1fr)}.container{padding:40px 20px}.section-box{padding:24px}}
 </style>
 </head>
 <body>
@@ -88,11 +95,13 @@ footer p{font-size:0.7rem;color:#999;font-weight:300}
 </div>
 <div class="stats-grid">
 <div class="stat-card"><div class="num" id="remainingClasses">-</div><div class="label">잔여 수업 횟수</div></div>
+<div class="stat-card"><div class="num small-text" id="expiryDate">-</div><div class="label">유효기간</div></div>
 <div class="stat-card"><div class="num" id="totalAttended">-</div><div class="label">총 출석 횟수</div></div>
 <div class="stat-card"><div class="num" id="activePasses">-</div><div class="label">보유 이용권</div></div>
 </div>
 <div class="section-box">
 <h3 class="eng">Class Pass</h3>
+<div id="passListSection">
 <p style="font-size:0.85rem;font-weight:300;color:#666;margin-bottom:20px">12회 이용권 (99,000원)을 구매하시려면 아래 버튼을 눌러주세요.</p>
 <button class="purchase-btn eng" onclick="requestPass()">Purchase Pass</button>
 <div class="bank-info-box" id="bankInfo">
@@ -102,6 +111,8 @@ footer p{font-size:0.7rem;color:#999;font-weight:300}
 <strong>금액</strong> 99,000원<br><br>
 입금 확인 후 이용권이 자동으로 활성화됩니다.
 </div>
+</div>
+<div id="passTable" style="display:none;margin-top:20px"></div>
 </div>
 <div class="section-box">
 <h3 class="eng">Payment History</h3>
@@ -133,51 +144,115 @@ async function loadMypage() {
     // Stats
     let remaining = 0;
     let activeCount = 0;
-    data.passes.forEach(p => { if (p.status === 'active') { remaining += p.remaining_classes; activeCount++; } });
+    let nearestExpiry = null;
+    data.passes.forEach(p => {
+      if (p.status === 'active') {
+        remaining += p.remaining_classes;
+        activeCount++;
+        if (p.expires_at) {
+          const exp = new Date(p.expires_at);
+          if (!nearestExpiry || exp < nearestExpiry) nearestExpiry = exp;
+        }
+      }
+    });
     document.getElementById('remainingClasses').textContent = remaining;
     document.getElementById('totalAttended').textContent = data.attendance.length;
     document.getElementById('activePasses').textContent = activeCount;
-    // Payments
-    if (data.payments.length > 0) {
-      let html = '<table><thead><tr><th>Date</th><th>Amount</th><th>Status</th></tr></thead><tbody>';
-      data.payments.forEach(p => {
-        const date = new Date(p.created_at).toLocaleDateString('ko-KR');
-        const badge = p.status === 'confirmed' ? 'badge-confirmed' : 'badge-pending';
-        const label = p.status === 'confirmed' ? '확인완료' : '입금대기';
-        html += '<tr><td>' + date + '</td><td>' + p.amount.toLocaleString() + '원</td><td><span class="badge ' + badge + '">' + label + '</span></td></tr>';
+
+    // Expiry date display
+    const expiryEl = document.getElementById('expiryDate');
+    if (nearestExpiry) {
+      const now = new Date();
+      const daysLeft = Math.ceil((nearestExpiry - now) / (1000 * 60 * 60 * 24));
+      const expiryStr = nearestExpiry.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
+      if (daysLeft <= 0) {
+        expiryEl.textContent = '만료됨';
+        expiryEl.className = 'num small-text expiry-danger';
+      } else if (daysLeft <= 14) {
+        expiryEl.textContent = expiryStr;
+        expiryEl.className = 'num small-text expiry-warning';
+      } else {
+        expiryEl.textContent = expiryStr;
+        expiryEl.className = 'num small-text';
+      }
+    } else {
+      expiryEl.textContent = '-';
+    }
+
+    // Pass table
+    if (data.passes.length > 0) {
+      var html = '<table class="pass-table"><thead><tr><th>구매일</th><th>잔여/전체</th><th>유효기간</th><th>상태</th></tr></thead><tbody>';
+      data.passes.forEach(function(p) {
+        var purchDate = new Date(p.purchased_at).toLocaleDateString('ko-KR');
+        var statusBadge = '';
+        if (p.status === 'active') statusBadge = '<span class="badge badge-active">사용중</span>';
+        else if (p.status === 'used') statusBadge = '<span class="badge badge-used">사용완료</span>';
+        else statusBadge = '<span class="badge badge-used">' + p.status + '</span>';
+
+        var expiryCell = '-';
+        if (p.expires_at) {
+          var expDate = new Date(p.expires_at);
+          var now = new Date();
+          var dLeft = Math.ceil((expDate - now) / (1000 * 60 * 60 * 24));
+          var expStr = expDate.toLocaleDateString('ko-KR', { year: 'numeric', month: 'short', day: 'numeric' });
+          if (dLeft <= 0) {
+            expiryCell = '<span class="expiry-cell expired">' + expStr + ' (만료)</span>';
+          } else if (dLeft <= 14) {
+            expiryCell = '<span class="expiry-cell near">' + expStr + ' (D-' + dLeft + ')</span>';
+          } else {
+            expiryCell = '<span class="expiry-cell">' + expStr + '</span>';
+          }
+        }
+
+        html += '<tr><td>' + purchDate + '</td><td>' + p.remaining_classes + '/' + p.total_classes + '</td><td>' + expiryCell + '</td><td>' + statusBadge + '</td></tr>';
       });
       html += '</tbody></table>';
-      document.getElementById('paymentList').innerHTML = html;
+      document.getElementById('passTable').innerHTML = html;
+      document.getElementById('passTable').style.display = 'block';
+    }
+
+    // Payments
+    if (data.payments.length > 0) {
+      var pHtml = '<table><thead><tr><th>Date</th><th>Amount</th><th>Status</th></tr></thead><tbody>';
+      data.payments.forEach(function(p) {
+        var date = new Date(p.created_at).toLocaleDateString('ko-KR');
+        var badge = p.status === 'confirmed' ? 'badge-confirmed' : 'badge-pending';
+        var label = p.status === 'confirmed' ? '확인완료' : (p.status === 'underpaid' ? '추가입금필요' : '입금대기');
+        if (p.status === 'underpaid') badge = 'badge-pending';
+        pHtml += '<tr><td>' + date + '</td><td>' + p.amount.toLocaleString() + '원</td><td><span class="badge ' + badge + '">' + label + '</span></td></tr>';
+      });
+      pHtml += '</tbody></table>';
+      document.getElementById('paymentList').innerHTML = pHtml;
     }
     // Attendance
     if (data.attendance.length > 0) {
-      let html = '<table><thead><tr><th>Date</th><th>Note</th></tr></thead><tbody>';
-      data.attendance.forEach(a => {
-        const date = new Date(a.attended_at).toLocaleDateString('ko-KR', { year:'numeric', month:'long', day:'numeric', weekday:'short' });
-        html += '<tr><td>' + date + '</td><td>' + (a.note || '-') + '</td></tr>';
+      var aHtml = '<table><thead><tr><th>Date</th><th>Note</th></tr></thead><tbody>';
+      data.attendance.forEach(function(a) {
+        var date = new Date(a.attended_at).toLocaleDateString('ko-KR', { year:'numeric', month:'long', day:'numeric', weekday:'short' });
+        aHtml += '<tr><td>' + date + '</td><td>' + (a.note || '-') + '</td></tr>';
       });
-      html += '</tbody></table>';
-      document.getElementById('attendanceList').innerHTML = html;
+      aHtml += '</tbody></table>';
+      document.getElementById('attendanceList').innerHTML = aHtml;
     }
   } catch (err) { console.error(err); }
 }
 async function changePassword() {
-  const msgEl = document.getElementById('pwMsg');
+  var msgEl = document.getElementById('pwMsg');
   msgEl.textContent = '';
   msgEl.className = 'pw-msg';
-  const currentPw = document.getElementById('currentPw').value;
-  const newPw = document.getElementById('newPw').value;
-  const newPwConfirm = document.getElementById('newPwConfirm').value;
+  var currentPw = document.getElementById('currentPw').value;
+  var newPw = document.getElementById('newPw').value;
+  var newPwConfirm = document.getElementById('newPwConfirm').value;
   if (!currentPw || !newPw || !newPwConfirm) { msgEl.textContent = '모든 필드를 입력해주세요'; msgEl.className = 'pw-msg error'; return; }
   if (newPw.length < 6) { msgEl.textContent = '새 비밀번호는 6자 이상이어야 합니다'; msgEl.className = 'pw-msg error'; return; }
   if (newPw !== newPwConfirm) { msgEl.textContent = '새 비밀번호가 일치하지 않습니다'; msgEl.className = 'pw-msg error'; return; }
   try {
-    const res = await fetch('/api/change-password', {
+    var res = await fetch('/api/change-password', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ current_password: currentPw, new_password: newPw })
     });
-    const data = await res.json();
+    var data = await res.json();
     if (data.success) {
       msgEl.textContent = '비밀번호가 성공적으로 변경되었습니다!';
       msgEl.className = 'pw-msg success';
@@ -194,12 +269,12 @@ async function changePassword() {
 }
 async function requestPass() {
   try {
-    const res = await fetch('/api/passes/request', {
+    var res = await fetch('/api/passes/request', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({})
     });
-    const data = await res.json();
+    var data = await res.json();
     if (data.success) {
       document.getElementById('bankInfo').style.display = 'block';
       loadMypage();
