@@ -516,6 +516,160 @@ app.get('/api/admin/members', requireDB, requireAdmin, async (req, res) => {
   }
 });
 
+// ===================== ADMIN: 회원 상세 조회 =====================
+
+app.get('/api/admin/members/:id', requireDB, requireAdmin, async (req, res) => {
+  const pool = getPool();
+  try {
+    const userId = req.params.id;
+
+    // 회원 기본 정보
+    const userResult = await pool.query(
+      'SELECT id, name, email, phone, password_is_temp, created_at FROM users WHERE id = $1 AND role = $2',
+      [userId, 'member']
+    );
+    if (userResult.rows.length === 0) return res.status(404).json({ error: '회원을 찾을 수 없습니다' });
+
+    // 이용권 목록
+    const passResult = await pool.query(
+      'SELECT * FROM class_passes WHERE user_id = $1 ORDER BY purchased_at DESC',
+      [userId]
+    );
+
+    // 결제 내역
+    const paymentResult = await pool.query(
+      'SELECT * FROM payments WHERE user_id = $1 ORDER BY created_at DESC',
+      [userId]
+    );
+
+    // 출석 로그 (전체)
+    const attendanceResult = await pool.query(
+      'SELECT a.*, cp.total_classes, cp.remaining_classes as pass_remaining FROM attendance a LEFT JOIN class_passes cp ON a.class_pass_id = cp.id WHERE a.user_id = $1 ORDER BY a.attended_at DESC',
+      [userId]
+    );
+
+    // 통계
+    const totalAttended = attendanceResult.rows.length;
+    const activePasses = passResult.rows.filter(p => p.status === 'active' && p.remaining_classes > 0);
+    const totalRemaining = activePasses.reduce((sum, p) => sum + p.remaining_classes, 0);
+
+    res.json({
+      user: userResult.rows[0],
+      passes: passResult.rows,
+      payments: paymentResult.rows,
+      attendance: attendanceResult.rows,
+      stats: {
+        total_attended: totalAttended,
+        total_remaining: totalRemaining,
+        active_passes: activePasses.length
+      }
+    });
+  } catch (err) {
+    console.error('Admin member detail error:', err);
+    res.status(500).json({ error: '서버 오류' });
+  }
+});
+
+// ===================== ADMIN: 이용권 횟수 추가 =====================
+
+app.post('/api/admin/members/:id/add-credits', requireDB, requireAdmin, async (req, res) => {
+  const pool = getPool();
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const userId = req.params.id;
+    const { credits, note } = req.body;
+    const addCount = parseInt(credits);
+
+    if (!addCount || addCount < 1 || addCount > 100) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: '추가할 횟수는 1~100 사이여야 합니다' });
+    }
+
+    // 활성 이용권 찾기
+    const passResult = await client.query(
+      "SELECT * FROM class_passes WHERE user_id = $1 AND status = 'active' ORDER BY purchased_at DESC LIMIT 1",
+      [userId]
+    );
+
+    let passId;
+    if (passResult.rows.length > 0) {
+      // 기존 활성 이용권에 횟수 추가
+      passId = passResult.rows[0].id;
+      await client.query(
+        'UPDATE class_passes SET remaining_classes = remaining_classes + $1, total_classes = total_classes + $1 WHERE id = $2',
+        [addCount, passId]
+      );
+    } else {
+      // 활성 이용권이 없으면 새로 생성
+      const newPass = await client.query(
+        "INSERT INTO class_passes (user_id, total_classes, remaining_classes, status, expires_at) VALUES ($1, $2, $2, 'active', NOW() + INTERVAL '3 months') RETURNING id",
+        [userId, addCount]
+      );
+      passId = newPass.rows[0].id;
+    }
+
+    await client.query('COMMIT');
+
+    // 추가 후 현재 상태 조회
+    const updated = await pool.query(
+      "SELECT COALESCE(SUM(remaining_classes), 0) as total_remaining FROM class_passes WHERE user_id = $1 AND status = 'active'",
+      [userId]
+    );
+
+    res.json({
+      success: true,
+      added: addCount,
+      pass_id: passId,
+      total_remaining: parseInt(updated.rows[0].total_remaining),
+      note: note || ''
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Add credits error:', err);
+    res.status(500).json({ error: '서버 오류' });
+  } finally {
+    client.release();
+  }
+});
+
+// ===================== ADMIN: 회원 출석 로그 조회 =====================
+
+app.get('/api/admin/members/:id/attendance', requireDB, requireAdmin, async (req, res) => {
+  const pool = getPool();
+  try {
+    const userId = req.params.id;
+    const limit = parseInt(req.query.limit) || 50;
+    const offset = parseInt(req.query.offset) || 0;
+
+    const result = await pool.query(
+      `SELECT a.id, a.attended_at, a.note, a.zoom_meeting_uuid,
+              cp.total_classes, cp.remaining_classes as pass_remaining, cp.status as pass_status
+       FROM attendance a
+       LEFT JOIN class_passes cp ON a.class_pass_id = cp.id
+       WHERE a.user_id = $1
+       ORDER BY a.attended_at DESC
+       LIMIT $2 OFFSET $3`,
+      [userId, limit, offset]
+    );
+
+    const countResult = await pool.query(
+      'SELECT COUNT(*) FROM attendance WHERE user_id = $1',
+      [userId]
+    );
+
+    res.json({
+      attendance: result.rows,
+      total: parseInt(countResult.rows[0].count),
+      limit,
+      offset
+    });
+  } catch (err) {
+    console.error('Admin attendance log error:', err);
+    res.status(500).json({ error: '서버 오류' });
+  }
+});
+
 app.get('/api/admin/payments', requireDB, requireAdmin, async (req, res) => {
   const pool = getPool();
   try {
