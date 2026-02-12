@@ -9,6 +9,17 @@ const { generateTempPassword } = require('./words');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// ===================== CONFIG (환경변수 통합) =====================
+const CONFIG = {
+  PASS_PRICE: parseInt(process.env.PASS_PRICE) || 99000,
+  PASS_CLASSES: parseInt(process.env.PASS_CLASSES) || 12,
+  PASS_MONTHS: parseInt(process.env.PASS_MONTHS) || 3,
+  BANK_NAME: process.env.BANK_NAME || '농협',
+  BANK_ACCOUNT: process.env.BANK_ACCOUNT || '312-0025-5524-11',
+  BANK_HOLDER: process.env.BANK_HOLDER || '황준성',
+  HOST_EMAIL: process.env.HOST_EMAIL || 'junseong@junseonghwang.com',
+};
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -18,7 +29,10 @@ const sessionConfig = {
   secret: process.env.SESSION_SECRET || 'enneagram-yoga-secret-key-change-in-production',
   resave: false,
   saveUninitialized: false,
-  cookie: { maxAge: 30 * 24 * 60 * 60 * 1000, secure: false }
+  cookie: {
+    maxAge: 30 * 24 * 60 * 60 * 1000,
+    secure: process.env.NODE_ENV === 'production'
+  }
 };
 
 const initPool = getPool();
@@ -56,6 +70,19 @@ function requireApiKey(req, res, next) {
   if (apiKey !== validKey) return res.status(401).json({ error: 'Invalid API key' });
   next();
 }
+
+// ===================== CONFIG API (공개) =====================
+
+app.get('/api/config', (req, res) => {
+  res.json({
+    pass_price: CONFIG.PASS_PRICE,
+    pass_classes: CONFIG.PASS_CLASSES,
+    pass_months: CONFIG.PASS_MONTHS,
+    bank_name: CONFIG.BANK_NAME,
+    bank_account: CONFIG.BANK_ACCOUNT,
+    bank_holder: CONFIG.BANK_HOLDER
+  });
+});
 
 // ===================== APPLICATION API (공개) =====================
 
@@ -97,14 +124,31 @@ app.post('/api/webhook/payment-confirm', requireDB, requireApiKey, async (req, r
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const { depositor_name, amount, phone, email } = req.body;
+    const { depositor_name, amount, phone, email, transaction_id } = req.body;
     if (!depositor_name && !phone && !email) {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: '입금자명, 전화번호, 이메일 중 하나 이상 필요합니다' });
     }
 
+    // ===== 멱등성 체크: transaction_id가 있으면 중복 확인 =====
+    if (transaction_id) {
+      const dupCheck = await client.query(
+        "SELECT id FROM payments WHERE transaction_id = $1",
+        [transaction_id]
+      );
+      if (dupCheck.rows.length > 0) {
+        await client.query('ROLLBACK');
+        return res.json({
+          success: true,
+          status: 'duplicate',
+          message: '이미 처리된 입금건입니다',
+          payment_id: dupCheck.rows[0].id
+        });
+      }
+    }
+
     let paidAmount = parseInt(amount) || 0;
-    const expectedAmount = 99000;
+    const expectedAmount = CONFIG.PASS_PRICE;
 
     // 1. Find matching application
     let appResult;
@@ -136,8 +180,6 @@ app.post('/api/webhook/payment-confirm', requireDB, requireApiKey, async (req, r
 
     // 2. Check amount - underpaid (24시간 이내 부분입금만 합산)
     if (paidAmount > 0 && paidAmount < expectedAmount) {
-      // 이전 underpaid 결제 금액 합산 (24시간 이내 기록만)
-      // user_id가 아직 없을 수 있으므로 (첫 부분입금) depositor_name 기반으로도 조회
       const existingUserForCheck = await client.query('SELECT id FROM users WHERE email = $1 LIMIT 1', [application.email]);
       const existingUserId = existingUserForCheck.rows.length > 0 ? existingUserForCheck.rows[0].id : null;
 
@@ -149,7 +191,6 @@ app.post('/api/webhook/payment-confirm', requireDB, requireApiKey, async (req, r
         );
         previousTotal = parseInt(prevPayments.rows[0].total_prev) || 0;
       } else {
-        // 회원이 아직 없는 경우 → user_id=NULL이고 depositor_name이 같은 underpaid 기록 조회
         const prevPayments = await client.query(
           "SELECT COALESCE(SUM(amount), 0) as total_prev FROM payments WHERE user_id IS NULL AND depositor_name = $1 AND status = 'underpaid' AND confirmed_at >= NOW() - INTERVAL '24 hours'",
           [depositor_name || application.name]
@@ -159,34 +200,29 @@ app.post('/api/webhook/payment-confirm', requireDB, requireApiKey, async (req, r
       const totalPaid = previousTotal + paidAmount;
 
       if (totalPaid >= expectedAmount) {
-        // 합산 금액이 충분 → 24시간 이내 underpaid 기록들을 confirmed로 변경하고 정상 처리
         if (existingUserId) {
           await client.query(
             "UPDATE payments SET status = 'confirmed', confirmed_at = NOW() WHERE user_id = $1 AND status = 'underpaid' AND confirmed_at >= NOW() - INTERVAL '24 hours'",
             [existingUserId]
           );
         } else {
-          // user_id=NULL인 이전 underpaid 기록들도 confirmed로 변경
           await client.query(
             "UPDATE payments SET status = 'confirmed', confirmed_at = NOW() WHERE user_id IS NULL AND depositor_name = $1 AND status = 'underpaid' AND confirmed_at >= NOW() - INTERVAL '24 hours'",
             [depositor_name || application.name]
           );
         }
-        // paidAmount를 totalPaid로 재설정하여 아래 정상 플로우에서 사용
         paidAmount = totalPaid;
       } else {
-        // 합산해도 부족 → underpaid 기록 후 반환
         const shortage = expectedAmount - totalPaid;
         if (existingUserId) {
           await client.query(
-            "INSERT INTO payments (user_id, amount, depositor_name, status, confirmed_at) VALUES ($1, $2, $3, 'underpaid', NOW())",
-            [existingUserId, paidAmount, depositor_name || application.name]
+            "INSERT INTO payments (user_id, amount, depositor_name, status, confirmed_at, transaction_id) VALUES ($1, $2, $3, 'underpaid', NOW(), $4)",
+            [existingUserId, paidAmount, depositor_name || application.name, transaction_id || null]
           );
         } else {
-          // 아직 회원이 없는 경우 → user_id NULL로 기록
           await client.query(
-            "INSERT INTO payments (user_id, amount, depositor_name, status, confirmed_at) VALUES (NULL, $1, $2, 'underpaid', NOW())",
-            [paidAmount, depositor_name || application.name]
+            "INSERT INTO payments (user_id, amount, depositor_name, status, confirmed_at, transaction_id) VALUES (NULL, $1, $2, 'underpaid', NOW(), $3)",
+            [paidAmount, depositor_name || application.name, transaction_id || null]
           );
         }
         await client.query('COMMIT');
@@ -198,7 +234,7 @@ app.post('/api/webhook/payment-confirm', requireDB, requireApiKey, async (req, r
           shortage: shortage,
           user_name: application.name,
           user_phone: application.phone,
-          message: '총 ' + totalPaid.toLocaleString() + '원이 입금되어 ' + shortage.toLocaleString() + '원이 부족합니다. 농협 312-0025-5524-11 (황준성) 계좌로 차액을 추가 입금해주세요.'
+          message: '총 ' + totalPaid.toLocaleString() + '원이 입금되어 ' + shortage.toLocaleString() + '원이 부족합니다. ' + CONFIG.BANK_NAME + ' ' + CONFIG.BANK_ACCOUNT + ' (' + CONFIG.BANK_HOLDER + ') 계좌로 차액을 추가 입금해주세요.'
         });
       }
     }
@@ -213,7 +249,6 @@ app.post('/api/webhook/payment-confirm', requireDB, requireApiKey, async (req, r
       userId = existingUser.rows[0].id;
       isNewUser = false;
     } else {
-      // Create new user with temp password
       tempPassword = generateTempPassword();
       const hashed = await bcrypt.hash(tempPassword, 10);
       const newUser = await client.query(
@@ -224,16 +259,16 @@ app.post('/api/webhook/payment-confirm', requireDB, requireApiKey, async (req, r
       isNewUser = true;
     }
 
-    // 4. Create class pass (with 3-month expiry)
+    // 4. Create class pass
     const passResult = await client.query(
-      "INSERT INTO class_passes (user_id, total_classes, remaining_classes, status, expires_at) VALUES ($1, 12, 12, 'active', NOW() + INTERVAL '3 months') RETURNING *",
-      [userId]
+      "INSERT INTO class_passes (user_id, total_classes, remaining_classes, status, expires_at) VALUES ($1, $2, $2, 'active', NOW() + INTERVAL '" + CONFIG.PASS_MONTHS + " months') RETURNING *",
+      [userId, CONFIG.PASS_CLASSES]
     );
 
     // 5. Create payment record
     await client.query(
-      "INSERT INTO payments (user_id, amount, depositor_name, status, confirmed_at, class_pass_id) VALUES ($1, $2, $3, 'confirmed', NOW(), $4)",
-      [userId, paidAmount || expectedAmount, depositor_name || application.name, passResult.rows[0].id]
+      "INSERT INTO payments (user_id, amount, depositor_name, status, confirmed_at, class_pass_id, transaction_id) VALUES ($1, $2, $3, 'confirmed', NOW(), $4, $5)",
+      [userId, paidAmount || expectedAmount, depositor_name || application.name, passResult.rows[0].id, transaction_id || null]
     );
 
     // 6. Update application
@@ -242,9 +277,17 @@ app.post('/api/webhook/payment-confirm', requireDB, requireApiKey, async (req, r
       [userId, application.id]
     );
 
+    // 7. Update NULL user_id underpaid records to point to user
+    if (isNewUser) {
+      await client.query(
+        "UPDATE payments SET user_id = $1 WHERE user_id IS NULL AND depositor_name = $2",
+        [userId, depositor_name || application.name]
+      );
+    }
+
     await client.query('COMMIT');
 
-    // 7. Check overpaid
+    // 8. Check overpaid
     let overpaidInfo = null;
     if (paidAmount > expectedAmount) {
       const excess = paidAmount - expectedAmount;
@@ -289,24 +332,22 @@ app.post('/api/webhook/zoom-attendance', requireDB, requireApiKey, async (req, r
     }
 
     const results = {
-      processed: [],   // 출석 처리 완료
-      already_done: [], // 이미 처리됨 (중복 방지)
-      no_pass: [],      // 이용권 없음
-      not_found: [],    // DB에 없는 이메일
-      host_skipped: []  // 호스트 스킵
+      processed: [],
+      already_done: [],
+      no_pass: [],
+      not_found: [],
+      host_skipped: []
     };
 
     for (const participant of participants) {
       const email = (participant.email || '').toLowerCase().trim();
       if (!email) continue;
 
-      // 호스트(강사) 스킵
-      if (email === 'junseong@junseonghwang.com') {
+      if (email === CONFIG.HOST_EMAIL) {
         results.host_skipped.push(email);
         continue;
       }
 
-      // 1. 이메일로 회원 조회
       const userResult = await client.query(
         'SELECT id, name, email FROM users WHERE LOWER(email) = $1',
         [email]
@@ -318,7 +359,6 @@ app.post('/api/webhook/zoom-attendance', requireDB, requireApiKey, async (req, r
 
       const user = userResult.rows[0];
 
-      // 2. 이 미팅 UUID로 이미 출석 처리했는지 확인 (중복 방지)
       const dupCheck = await client.query(
         'SELECT id FROM attendance WHERE user_id = $1 AND zoom_meeting_uuid = $2',
         [user.id, meeting_uuid]
@@ -328,7 +368,6 @@ app.post('/api/webhook/zoom-attendance', requireDB, requireApiKey, async (req, r
         continue;
       }
 
-      // 3. 활성 이용권 확인
       const passResult = await client.query(
         "SELECT * FROM class_passes WHERE user_id = $1 AND status = 'active' AND remaining_classes > 0 ORDER BY purchased_at ASC LIMIT 1",
         [user.id]
@@ -340,19 +379,15 @@ app.post('/api/webhook/zoom-attendance', requireDB, requireApiKey, async (req, r
 
       const pass = passResult.rows[0];
 
-      // 4. 출석 차감 처리 (트랜잭션)
       await client.query('BEGIN');
       try {
-        // 잔여 횟수 차감
         await client.query(
           'UPDATE class_passes SET remaining_classes = remaining_classes - 1 WHERE id = $1',
           [pass.id]
         );
-        // 0이 되면 상태 변경
         if (pass.remaining_classes - 1 <= 0) {
           await client.query("UPDATE class_passes SET status = 'used' WHERE id = $1", [pass.id]);
         }
-        // 출석 기록 추가
         await client.query(
           'INSERT INTO attendance (user_id, class_pass_id, zoom_meeting_uuid, note) VALUES ($1, $2, $3, $4)',
           [user.id, pass.id, meeting_uuid, 'Zoom 자동출석: ' + (meeting_topic || '')]
@@ -508,6 +543,40 @@ app.post('/api/change-password', requireDB, requireAuth, async (req, res) => {
   }
 });
 
+// ===================== PASSWORD RESET (SMS 기반) =====================
+
+app.post('/api/reset-password', requireDB, async (req, res) => {
+  const pool = getPool();
+  try {
+    const { email, phone } = req.body;
+    if (!email || !phone) return res.status(400).json({ error: '이메일과 전화번호를 모두 입력해주세요' });
+    const normalizedPhone = phone.replace(/[-\s]/g, '');
+    const userResult = await pool.query(
+      "SELECT id, name, email FROM users WHERE email = $1 AND REPLACE(REPLACE(phone, '-', ''), ' ', '') = $2",
+      [email, normalizedPhone]
+    );
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: '일치하는 회원 정보를 찾을 수 없습니다' });
+    }
+    const user = userResult.rows[0];
+    const tempPassword = generateTempPassword();
+    const hashed = await bcrypt.hash(tempPassword, 10);
+    await pool.query('UPDATE users SET password = $1, password_is_temp = TRUE WHERE id = $2', [hashed, user.id]);
+    // 새 임시비밀번호를 응답에 포함 → n8n 또는 프론트에서 SMS 발송 가능
+    res.json({
+      success: true,
+      user_name: user.name,
+      user_email: user.email,
+      user_phone: normalizedPhone,
+      temp_password: tempPassword,
+      message: '새 임시비밀번호가 생성되었습니다. SMS로 발송해주세요.'
+    });
+  } catch (err) {
+    console.error('Reset password error:', err);
+    res.status(500).json({ error: '서버 오류가 발생했습니다' });
+  }
+});
+
 // ===================== MEMBER API =====================
 
 app.get('/api/mypage', requireDB, requireAuth, async (req, res) => {
@@ -537,7 +606,7 @@ app.post('/api/passes/request', requireDB, requireAuth, async (req, res) => {
     const depositorName = req.body.depositor_name || req.session.userName;
     const paymentResult = await pool.query(
       'INSERT INTO payments (user_id, amount, depositor_name, status) VALUES ($1, $2, $3, $4) RETURNING *',
-      [userId, 99000, depositorName, 'pending']
+      [userId, CONFIG.PASS_PRICE, depositorName, 'pending']
     );
     res.json({ success: true, payment: paymentResult.rows[0] });
   } catch (err) {
@@ -551,13 +620,36 @@ app.post('/api/passes/request', requireDB, requireAuth, async (req, res) => {
 app.get('/api/admin/members', requireDB, requireAdmin, async (req, res) => {
   const pool = getPool();
   try {
-    const result = await pool.query(`
-      SELECT u.id, u.name, u.email, u.phone, u.created_at,
-        (SELECT COALESCE(SUM(cp.remaining_classes), 0) FROM class_passes cp WHERE cp.user_id = u.id AND cp.status = 'active') as remaining_classes,
-        (SELECT COUNT(*) FROM attendance a WHERE a.user_id = u.id) as total_attended
-      FROM users u WHERE u.role = 'member' ORDER BY u.created_at DESC
-    `);
-    res.json({ members: result.rows });
+    const search = req.query.search || '';
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const offset = (page - 1) * limit;
+
+    let whereClause = "WHERE u.role = 'member'";
+    const params = [];
+    if (search) {
+      whereClause += " AND (u.name ILIKE $1 OR u.email ILIKE $1 OR u.phone ILIKE $1)";
+      params.push('%' + search + '%');
+    }
+
+    const countResult = await pool.query(
+      "SELECT COUNT(*) FROM users u " + whereClause,
+      params
+    );
+    const totalCount = parseInt(countResult.rows[0].count);
+
+    const result = await pool.query(
+      "SELECT u.id, u.name, u.email, u.phone, u.created_at," +
+      " (SELECT COALESCE(SUM(cp.remaining_classes), 0) FROM class_passes cp WHERE cp.user_id = u.id AND cp.status = 'active') as remaining_classes," +
+      " (SELECT COUNT(*) FROM attendance a WHERE a.user_id = u.id) as total_attended" +
+      " FROM users u " + whereClause +
+      " ORDER BY u.created_at DESC LIMIT $" + (params.length + 1) + " OFFSET $" + (params.length + 2),
+      [...params, limit, offset]
+    );
+    res.json({
+      members: result.rows,
+      pagination: { page, limit, total: totalCount, totalPages: Math.ceil(totalCount / limit) }
+    });
   } catch (err) {
     console.error('Admin members error:', err);
     res.status(500).json({ error: '서버 오류' });
@@ -570,47 +662,26 @@ app.get('/api/admin/members/:id', requireDB, requireAdmin, async (req, res) => {
   const pool = getPool();
   try {
     const userId = req.params.id;
-
-    // 회원 기본 정보
     const userResult = await pool.query(
       'SELECT id, name, email, phone, password_is_temp, created_at FROM users WHERE id = $1 AND role = $2',
       [userId, 'member']
     );
     if (userResult.rows.length === 0) return res.status(404).json({ error: '회원을 찾을 수 없습니다' });
-
-    // 이용권 목록
-    const passResult = await pool.query(
-      'SELECT * FROM class_passes WHERE user_id = $1 ORDER BY purchased_at DESC',
-      [userId]
-    );
-
-    // 결제 내역
-    const paymentResult = await pool.query(
-      'SELECT * FROM payments WHERE user_id = $1 ORDER BY created_at DESC',
-      [userId]
-    );
-
-    // 출석 로그 (전체)
+    const passResult = await pool.query('SELECT * FROM class_passes WHERE user_id = $1 ORDER BY purchased_at DESC', [userId]);
+    const paymentResult = await pool.query('SELECT * FROM payments WHERE user_id = $1 ORDER BY created_at DESC', [userId]);
     const attendanceResult = await pool.query(
       'SELECT a.*, cp.total_classes, cp.remaining_classes as pass_remaining FROM attendance a LEFT JOIN class_passes cp ON a.class_pass_id = cp.id WHERE a.user_id = $1 ORDER BY a.attended_at DESC',
       [userId]
     );
-
-    // 통계
     const totalAttended = attendanceResult.rows.length;
     const activePasses = passResult.rows.filter(p => p.status === 'active' && p.remaining_classes > 0);
     const totalRemaining = activePasses.reduce((sum, p) => sum + p.remaining_classes, 0);
-
     res.json({
       user: userResult.rows[0],
       passes: passResult.rows,
       payments: paymentResult.rows,
       attendance: attendanceResult.rows,
-      stats: {
-        total_attended: totalAttended,
-        total_remaining: totalRemaining,
-        active_passes: activePasses.length
-      }
+      stats: { total_attended: totalAttended, total_remaining: totalRemaining, active_passes: activePasses.length }
     });
   } catch (err) {
     console.error('Admin member detail error:', err);
@@ -628,43 +699,33 @@ app.post('/api/admin/members/:id/add-credits', requireDB, requireAdmin, async (r
     const userId = req.params.id;
     const { credits, note } = req.body;
     const addCount = parseInt(credits);
-
     if (!addCount || addCount < 1 || addCount > 100) {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: '추가할 횟수는 1~100 사이여야 합니다' });
     }
-
-    // 활성 이용권 찾기
     const passResult = await client.query(
       "SELECT * FROM class_passes WHERE user_id = $1 AND status = 'active' ORDER BY purchased_at DESC LIMIT 1",
       [userId]
     );
-
     let passId;
     if (passResult.rows.length > 0) {
-      // 기존 활성 이용권에 횟수 추가
       passId = passResult.rows[0].id;
       await client.query(
         'UPDATE class_passes SET remaining_classes = remaining_classes + $1, total_classes = total_classes + $1 WHERE id = $2',
         [addCount, passId]
       );
     } else {
-      // 활성 이용권이 없으면 새로 생성
       const newPass = await client.query(
-        "INSERT INTO class_passes (user_id, total_classes, remaining_classes, status, expires_at) VALUES ($1, $2, $2, 'active', NOW() + INTERVAL '3 months') RETURNING id",
+        "INSERT INTO class_passes (user_id, total_classes, remaining_classes, status, expires_at) VALUES ($1, $2, $2, 'active', NOW() + INTERVAL '" + CONFIG.PASS_MONTHS + " months') RETURNING id",
         [userId, addCount]
       );
       passId = newPass.rows[0].id;
     }
-
     await client.query('COMMIT');
-
-    // 추가 후 현재 상태 조회
     const updated = await pool.query(
       "SELECT COALESCE(SUM(remaining_classes), 0) as total_remaining FROM class_passes WHERE user_id = $1 AND status = 'active'",
       [userId]
     );
-
     res.json({
       success: true,
       added: addCount,
@@ -689,29 +750,12 @@ app.get('/api/admin/members/:id/attendance', requireDB, requireAdmin, async (req
     const userId = req.params.id;
     const limit = parseInt(req.query.limit) || 50;
     const offset = parseInt(req.query.offset) || 0;
-
     const result = await pool.query(
-      `SELECT a.id, a.attended_at, a.note, a.zoom_meeting_uuid,
-              cp.total_classes, cp.remaining_classes as pass_remaining, cp.status as pass_status
-       FROM attendance a
-       LEFT JOIN class_passes cp ON a.class_pass_id = cp.id
-       WHERE a.user_id = $1
-       ORDER BY a.attended_at DESC
-       LIMIT $2 OFFSET $3`,
+      "SELECT a.id, a.attended_at, a.note, a.zoom_meeting_uuid, cp.total_classes, cp.remaining_classes as pass_remaining, cp.status as pass_status FROM attendance a LEFT JOIN class_passes cp ON a.class_pass_id = cp.id WHERE a.user_id = $1 ORDER BY a.attended_at DESC LIMIT $2 OFFSET $3",
       [userId, limit, offset]
     );
-
-    const countResult = await pool.query(
-      'SELECT COUNT(*) FROM attendance WHERE user_id = $1',
-      [userId]
-    );
-
-    res.json({
-      attendance: result.rows,
-      total: parseInt(countResult.rows[0].count),
-      limit,
-      offset
-    });
+    const countResult = await pool.query('SELECT COUNT(*) FROM attendance WHERE user_id = $1', [userId]);
+    res.json({ attendance: result.rows, total: parseInt(countResult.rows[0].count), limit, offset });
   } catch (err) {
     console.error('Admin attendance log error:', err);
     res.status(500).json({ error: '서버 오류' });
@@ -722,12 +766,40 @@ app.get('/api/admin/payments', requireDB, requireAdmin, async (req, res) => {
   const pool = getPool();
   try {
     const status = req.query.status || 'all';
-    let query = `SELECT p.*, u.name as user_name, u.email as user_email, u.phone as user_phone FROM payments p JOIN users u ON p.user_id = u.id`;
+    const search = req.query.search || '';
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const offset = (page - 1) * limit;
+
+    let whereClause = '';
     const params = [];
-    if (status !== 'all') { query += ' WHERE p.status = $1'; params.push(status); }
-    query += ' ORDER BY p.created_at DESC';
-    const result = await pool.query(query, params);
-    res.json({ payments: result.rows });
+    let paramIdx = 1;
+
+    if (status !== 'all') {
+      whereClause += ' WHERE p.status = $' + paramIdx;
+      params.push(status);
+      paramIdx++;
+    }
+    if (search) {
+      whereClause += (whereClause ? ' AND' : ' WHERE') + ' (u.name ILIKE $' + paramIdx + ' OR u.phone ILIKE $' + paramIdx + ' OR p.depositor_name ILIKE $' + paramIdx + ')';
+      params.push('%' + search + '%');
+      paramIdx++;
+    }
+
+    const countResult = await pool.query(
+      'SELECT COUNT(*) FROM payments p LEFT JOIN users u ON p.user_id = u.id' + whereClause,
+      params
+    );
+    const totalCount = parseInt(countResult.rows[0].count);
+
+    const result = await pool.query(
+      'SELECT p.*, u.name as user_name, u.email as user_email, u.phone as user_phone FROM payments p LEFT JOIN users u ON p.user_id = u.id' + whereClause + ' ORDER BY p.created_at DESC LIMIT $' + paramIdx + ' OFFSET $' + (paramIdx + 1),
+      [...params, limit, offset]
+    );
+    res.json({
+      payments: result.rows,
+      pagination: { page, limit, total: totalCount, totalPages: Math.ceil(totalCount / limit) }
+    });
   } catch (err) {
     console.error('Admin payments error:', err);
     res.status(500).json({ error: '서버 오류' });
@@ -744,8 +816,8 @@ app.post('/api/admin/payments/:id/confirm', requireDB, requireAdmin, async (req,
     if (payment.rows.length === 0) { await client.query('ROLLBACK'); return res.status(404).json({ error: '결제를 찾을 수 없습니다' }); }
     if (payment.rows[0].status === 'confirmed') { await client.query('ROLLBACK'); return res.status(400).json({ error: '이미 확인된 결제입니다' }); }
     const passResult = await client.query(
-      "INSERT INTO class_passes (user_id, total_classes, remaining_classes, status, expires_at) VALUES ($1, 12, 12, $2, NOW() + INTERVAL '3 months') RETURNING *",
-      [payment.rows[0].user_id, 'active']
+      "INSERT INTO class_passes (user_id, total_classes, remaining_classes, status, expires_at) VALUES ($1, $2, $2, $3, NOW() + INTERVAL '" + CONFIG.PASS_MONTHS + " months') RETURNING *",
+      [payment.rows[0].user_id, CONFIG.PASS_CLASSES, 'active']
     );
     await client.query(
       'UPDATE payments SET status = $1, confirmed_at = NOW(), class_pass_id = $2 WHERE id = $3',
@@ -818,12 +890,37 @@ app.get('/api/admin/applications', requireDB, requireAdmin, async (req, res) => 
   const pool = getPool();
   try {
     const status = req.query.status || 'all';
-    let query = 'SELECT * FROM applications';
+    const search = req.query.search || '';
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const offset = (page - 1) * limit;
+
+    let whereClause = '';
     const params = [];
-    if (status !== 'all') { query += ' WHERE status = $1'; params.push(status); }
-    query += ' ORDER BY created_at DESC';
-    const result = await pool.query(query, params);
-    res.json({ applications: result.rows });
+    let paramIdx = 1;
+
+    if (status !== 'all') {
+      whereClause += ' WHERE status = $' + paramIdx;
+      params.push(status);
+      paramIdx++;
+    }
+    if (search) {
+      whereClause += (whereClause ? ' AND' : ' WHERE') + ' (name ILIKE $' + paramIdx + ' OR email ILIKE $' + paramIdx + ' OR phone ILIKE $' + paramIdx + ')';
+      params.push('%' + search + '%');
+      paramIdx++;
+    }
+
+    const countResult = await pool.query('SELECT COUNT(*) FROM applications' + whereClause, params);
+    const totalCount = parseInt(countResult.rows[0].count);
+
+    const result = await pool.query(
+      'SELECT * FROM applications' + whereClause + ' ORDER BY created_at DESC LIMIT $' + paramIdx + ' OFFSET $' + (paramIdx + 1),
+      [...params, limit, offset]
+    );
+    res.json({
+      applications: result.rows,
+      pagination: { page, limit, total: totalCount, totalPages: Math.ceil(totalCount / limit) }
+    });
   } catch (err) {
     console.error('Admin applications error:', err);
     res.status(500).json({ error: '서버 오류' });
