@@ -73,6 +73,21 @@ table tr.clickable:hover{background:var(--section-bg)}
 .detail-tab.active{color:var(--text);border-bottom-color:var(--accent)}
 .detail-tab-content{display:none}
 .detail-tab-content.active{display:block}
+/* Edit Form */
+.edit-form{display:none;margin-bottom:24px;padding:24px;background:var(--section-bg);border:1px solid var(--border)}
+.edit-form.active{display:block}
+.edit-form .form-row{display:flex;gap:12px;margin-bottom:12px;align-items:center}
+.edit-form .form-row label{width:80px;font-size:0.78rem;font-weight:400;flex-shrink:0}
+.edit-form .form-row input{flex:1;padding:8px 12px;border:1px solid var(--border);background:var(--white);font-family:'Noto Serif KR',serif;font-size:0.85rem;outline:none}
+.edit-form .form-row input:focus{border-color:var(--accent)}
+.edit-form .form-actions{display:flex;gap:8px;margin-top:16px}
+.detail-action-bar{display:flex;gap:8px;margin-bottom:24px}
+/* Confirm Dialog */
+.confirm-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.3);z-index:1000;justify-content:center;align-items:center}
+.confirm-overlay.active{display:flex}
+.confirm-box{background:var(--white);padding:30px;border:1px solid var(--border);max-width:400px;width:90%;text-align:center}
+.confirm-box p{font-size:0.88rem;margin-bottom:20px;line-height:1.7}
+.confirm-box .confirm-actions{display:flex;gap:10px;justify-content:center}
 /* Add Credits Form */
 .add-credits-form{display:flex;gap:12px;align-items:center;margin-bottom:20px;padding:16px;background:var(--section-bg);border:1px solid var(--border)}
 .add-credits-form label{font-size:0.78rem;font-weight:400;white-space:nowrap}
@@ -141,13 +156,28 @@ footer p{font-size:0.7rem;color:#999;font-weight:300}
 </div>
 <button class="detail-header .back-btn" style="padding:8px 20px;border:1px solid var(--border);background:transparent;color:var(--text);font-family:'Noto Serif KR',serif;font-size:0.78rem;cursor:pointer" onclick="closeDetail()">← 목록으로</button>
 </div>
+<div class="detail-action-bar">
+<button class="action-btn" onclick="toggleEditForm()">✏️ 정보 수정</button>
+<button class="action-btn danger" onclick="showDeleteConfirm()">🗑 회원 삭제</button>
+</div>
+
+<div class="edit-form" id="editForm">
+<div class="form-row"><label>이름</label><input type="text" id="editName"></div>
+<div class="form-row"><label>이메일</label><input type="text" id="editEmail"></div>
+<div class="form-row"><label>연락처</label><input type="text" id="editPhone"></div>
+<div class="form-actions">
+<button class="action-btn" onclick="saveMemberEdit()">저장</button>
+<button class="action-btn" onclick="toggleEditForm()" style="color:#888;border-color:#ccc">취소</button>
+</div>
+</div>
+
 <div class="detail-info" id="detailInfo"></div>
 <div class="detail-stats" id="detailStats"></div>
 
 <div class="detail-tabs">
-<button class="detail-tab active" onclick="switchDetailTab('attendance')">출석 로그</button>
-<button class="detail-tab" onclick="switchDetailTab('passes')">이용권</button>
-<button class="detail-tab" onclick="switchDetailTab('payments-detail')">결제 내역</button>
+<button class="detail-tab active" onclick="switchDetailTab('attendance', this)">출석 로그</button>
+<button class="detail-tab" onclick="switchDetailTab('passes', this)">이용권</button>
+<button class="detail-tab" onclick="switchDetailTab('payments-detail', this)">결제 내역</button>
 </div>
 
 <div class="detail-tab-content active" id="dtab-attendance">
@@ -164,6 +194,15 @@ footer p{font-size:0.7rem;color:#999;font-weight:300}
 </div>
 <div class="detail-tab-content" id="dtab-payments-detail">
 <div class="section-box"><div id="detailPayments"><div class="empty-state">결제 내역이 없습니다</div></div></div>
+</div>
+</div>
+</div>
+<div class="confirm-overlay" id="deleteConfirm">
+<div class="confirm-box">
+<p><strong id="deleteTargetName"></strong> 회원을 삭제하시겠습니까?<br><span style="font-size:0.76rem;color:#c44">출석기록, 이용권, 결제내역이 모두 삭제됩니다.</span></p>
+<div class="confirm-actions">
+<button class="action-btn danger" onclick="deleteMember()">삭제</button>
+<button class="action-btn" onclick="hideDeleteConfirm()">취소</button>
 </div>
 </div>
 </div>
@@ -280,6 +319,11 @@ async function openMemberDetail(userId) {
     // Hide main, show detail
     document.getElementById('mainView').style.display = 'none';
     document.getElementById('detailPanel').classList.add('active');
+
+    // Store for edit form
+    currentMemberData = data.user;
+    // Close edit form if open
+    document.getElementById('editForm').classList.remove('active');
 
     // Header
     document.getElementById('detailName').textContent = data.user.name;
@@ -405,10 +449,23 @@ function closeDetail() {
   loadStats();
 }
 
-function switchDetailTab(tab) {
+function switchDetailTab(tab, clickedBtn) {
   document.querySelectorAll('.detail-tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.detail-tab-content').forEach(t => t.classList.remove('active'));
-  event.target.classList.add('active');
+  if (clickedBtn) {
+    clickedBtn.classList.add('active');
+  } else {
+    // Called programmatically — activate the matching tab button
+    document.querySelectorAll('.detail-tab').forEach(t => {
+      if (t.textContent.trim().toLowerCase().includes(tab === 'attendance' ? '출석' : tab === 'passes' ? '이용권' : '결제')) {
+        t.classList.add('active');
+      }
+    });
+    // Fallback: just activate the first tab button if nothing matched
+    if (!document.querySelector('.detail-tab.active')) {
+      document.querySelector('.detail-tab').classList.add('active');
+    }
+  }
   document.getElementById('dtab-' + tab).classList.add('active');
 }
 
@@ -457,6 +514,76 @@ function searchMembersFn(){const q=document.getElementById('searchMembers').valu
 async function logout() {
   await fetch('/api/logout', { method: 'POST' });
   window.location.href = '/';
+}
+
+// ========== Edit / Delete ==========
+
+let currentMemberData = null;
+
+function toggleEditForm() {
+  const form = document.getElementById('editForm');
+  if (form.classList.contains('active')) {
+    form.classList.remove('active');
+  } else {
+    if (currentMemberData) {
+      document.getElementById('editName').value = currentMemberData.name || '';
+      document.getElementById('editEmail').value = currentMemberData.email || '';
+      document.getElementById('editPhone').value = currentMemberData.phone || '';
+    }
+    form.classList.add('active');
+  }
+}
+
+async function saveMemberEdit() {
+  if (!currentMemberId) return;
+  const name = document.getElementById('editName').value.trim();
+  const email = document.getElementById('editEmail').value.trim();
+  const phone = document.getElementById('editPhone').value.trim();
+  if (!name) { alert('이름을 입력해주세요'); return; }
+  try {
+    const res = await fetch('/api/admin/members/' + currentMemberId, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, phone })
+    });
+    const data = await res.json();
+    if (data.success) {
+      alert('회원 정보가 수정되었습니다');
+      document.getElementById('editForm').classList.remove('active');
+      openMemberDetail(currentMemberId);
+    } else {
+      alert(data.error || '오류가 발생했습니다');
+    }
+  } catch (err) {
+    alert('오류가 발생했습니다');
+  }
+}
+
+function showDeleteConfirm() {
+  if (!currentMemberData) return;
+  document.getElementById('deleteTargetName').textContent = currentMemberData.name;
+  document.getElementById('deleteConfirm').classList.add('active');
+}
+
+function hideDeleteConfirm() {
+  document.getElementById('deleteConfirm').classList.remove('active');
+}
+
+async function deleteMember() {
+  if (!currentMemberId) return;
+  hideDeleteConfirm();
+  try {
+    const res = await fetch('/api/admin/members/' + currentMemberId, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.success) {
+      alert(data.message);
+      closeDetail();
+    } else {
+      alert(data.error || '오류가 발생했습니다');
+    }
+  } catch (err) {
+    alert('오류가 발생했습니다');
+  }
 }
 
 function toggleMenu(){document.querySelector('nav ul').classList.toggle('open');}

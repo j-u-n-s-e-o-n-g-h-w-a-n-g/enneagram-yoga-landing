@@ -843,6 +843,66 @@ app.get('/api/admin/members/:id', requireDB, requireAdmin, async (req, res) => {
   }
 });
 
+// ===================== ADMIN: 회원 정보 수정 =====================
+
+app.put('/api/admin/members/:id', requireDB, requireAdmin, async (req, res) => {
+  const pool = getPool();
+  try {
+    const userId = req.params.id;
+    const { name, email, phone } = req.body;
+    if (!name || !name.trim()) return res.status(400).json({ error: '이름을 입력해주세요' });
+
+    // 이메일 중복 확인 (자기 자신 제외)
+    if (email && email.trim()) {
+      const dup = await pool.query('SELECT id FROM users WHERE email = $1 AND id != $2', [email.trim(), userId]);
+      if (dup.rows.length > 0) return res.status(400).json({ error: '이미 사용 중인 이메일입니다' });
+    }
+
+    const result = await pool.query(
+      'UPDATE users SET name = $1, email = $2, phone = $3 WHERE id = $4 AND role = $5 RETURNING id, name, email, phone',
+      [name.trim(), (email || '').trim(), (phone || '').trim(), userId, 'member']
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: '회원을 찾을 수 없습니다' });
+    res.json({ success: true, user: result.rows[0] });
+  } catch (err) {
+    console.error('Admin member update error:', err);
+    res.status(500).json({ error: '서버 오류' });
+  }
+});
+
+// ===================== ADMIN: 회원 삭제 =====================
+
+app.delete('/api/admin/members/:id', requireDB, requireAdmin, async (req, res) => {
+  const pool = getPool();
+  const client = await pool.connect();
+  try {
+    const userId = req.params.id;
+    // 회원 존재 여부 확인
+    const userCheck = await client.query('SELECT id, name FROM users WHERE id = $1 AND role = $2', [userId, 'member']);
+    if (userCheck.rows.length === 0) {
+      client.release();
+      return res.status(404).json({ error: '회원을 찾을 수 없습니다' });
+    }
+    const userName = userCheck.rows[0].name;
+    await client.query('BEGIN');
+    // CASCADE 순서: attendance → class_passes → payments → care_sms_log → journaling_sms_log → users
+    await client.query('DELETE FROM attendance WHERE user_id = $1', [userId]);
+    await client.query('DELETE FROM care_sms_log WHERE user_id = $1', [userId]);
+    await client.query('DELETE FROM journaling_sms_log WHERE user_id = $1', [userId]);
+    await client.query('DELETE FROM class_passes WHERE user_id = $1', [userId]);
+    await client.query('DELETE FROM payments WHERE user_id = $1', [userId]);
+    await client.query('DELETE FROM users WHERE id = $1', [userId]);
+    await client.query('COMMIT');
+    res.json({ success: true, message: userName + ' 회원이 삭제되었습니다' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Admin member delete error:', err);
+    res.status(500).json({ error: '서버 오류' });
+  } finally {
+    client.release();
+  }
+});
+
 // ===================== ADMIN: 이용권 횟수 추가 =====================
 
 app.post('/api/admin/members/:id/add-credits', requireDB, requireAdmin, async (req, res) => {
