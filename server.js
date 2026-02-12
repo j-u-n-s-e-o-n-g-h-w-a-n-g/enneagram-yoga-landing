@@ -130,7 +130,7 @@ app.post('/api/webhook/payment-confirm', requireDB, requireApiKey, async (req, r
       return res.status(400).json({ error: '입금자명, 전화번호, 이메일 중 하나 이상 필요합니다' });
     }
 
-    // ===== 멱등성 체크: transaction_id가 있으면 중복 확인 =====
+    // ===== 먱등성 체크: transaction_id가 있으면 중복 확인 =====
     if (transaction_id) {
       const dupCheck = await client.query(
         "SELECT id FROM payments WHERE transaction_id = $1",
@@ -428,6 +428,78 @@ app.post('/api/webhook/zoom-attendance', requireDB, requireApiKey, async (req, r
   }
 });
 
+// ===================== JOURNALING SMS TARGETS (n8n 전용) =====================
+
+app.get('/api/webhook/journaling-targets', requireDB, requireApiKey, async (req, res) => {
+  const pool = getPool();
+  try {
+    const result = await pool.query(`
+      WITH pass_first_attendance AS (
+        SELECT cp.id AS class_pass_id, cp.user_id, cp.expires_at,
+          MIN(a.attended_at) AS first_attended_at,
+          EXTRACT(DOW FROM MIN(a.attended_at) AT TIME ZONE 'Asia/Seoul') AS first_class_dow
+        FROM class_passes cp
+        JOIN attendance a ON a.class_pass_id = cp.id
+        WHERE cp.status = 'active'
+        GROUP BY cp.id
+      ),
+      eligible AS (
+        SELECT pfa.*, u.name, u.phone, u.email,
+          CASE
+            WHEN pfa.first_attended_at::date = (CURRENT_DATE AT TIME ZONE 'Asia/Seoul' - INTERVAL '1 day')::date
+                 AND NOT EXISTS (
+                   SELECT 1 FROM journaling_sms_log jsl
+                   WHERE jsl.class_pass_id = pfa.class_pass_id
+                 )
+            THEN 'first'
+            WHEN EXTRACT(DOW FROM CURRENT_DATE AT TIME ZONE 'Asia/Seoul') = pfa.first_class_dow
+                 AND (CURRENT_DATE AT TIME ZONE 'Asia/Seoul')::date >= (pfa.first_attended_at::date + INTERVAL '7 days')
+                 AND EXISTS (
+                   SELECT 1 FROM journaling_sms_log jsl
+                   WHERE jsl.class_pass_id = pfa.class_pass_id AND jsl.send_type = 'first'
+                 )
+                 AND NOT EXISTS (
+                   SELECT 1 FROM journaling_sms_log jsl
+                   WHERE jsl.class_pass_id = pfa.class_pass_id
+                     AND jsl.sent_at::date = (CURRENT_DATE AT TIME ZONE 'Asia/Seoul')::date
+                 )
+                 AND (pfa.expires_at IS NULL OR pfa.expires_at > NOW())
+            THEN 'recurring'
+            ELSE NULL
+          END AS sms_type
+        FROM pass_first_attendance pfa
+        JOIN users u ON u.id = pfa.user_id
+        WHERE u.role = 'member'
+      )
+      SELECT * FROM eligible WHERE sms_type IS NOT NULL
+    `);
+    res.json({ success: true, members: result.rows });
+  } catch (err) {
+    console.error('Journaling targets API error:', err);
+    res.status(500).json({ error: '서버 오류' });
+  }
+});
+
+// ===================== JOURNALING SMS LOG (n8n 전용) =====================
+
+app.post('/api/webhook/journaling-sms-log', requireDB, requireApiKey, async (req, res) => {
+  const pool = getPool();
+  try {
+    const { user_id, class_pass_id, send_type, send_day_of_week } = req.body;
+    if (!user_id || !class_pass_id || !send_type || send_day_of_week === undefined) {
+      return res.status(400).json({ error: 'user_id, class_pass_id, send_type, send_day_of_week 필수' });
+    }
+    const result = await pool.query(
+      'INSERT INTO journaling_sms_log (user_id, class_pass_id, send_type, send_day_of_week) VALUES ($1, $2, $3, $4) RETURNING *',
+      [user_id, class_pass_id, send_type, send_day_of_week]
+    );
+    res.json({ success: true, log: result.rows[0] });
+  } catch (err) {
+    console.error('Journaling SMS log error:', err);
+    res.status(500).json({ error: '서버 오류' });
+  }
+});
+
 // ===================== BACKUP API (n8n 전용) =====================
 
 app.get('/api/webhook/backup', requireDB, requireApiKey, async (req, res) => {
@@ -562,7 +634,6 @@ app.post('/api/reset-password', requireDB, async (req, res) => {
     const tempPassword = generateTempPassword();
     const hashed = await bcrypt.hash(tempPassword, 10);
     await pool.query('UPDATE users SET password = $1, password_is_temp = TRUE WHERE id = $2', [hashed, user.id]);
-    // 새 임시비밀번호를 응답에 포함 → n8n 또는 프론트에서 SMS 발송 가능
     res.json({
       success: true,
       user_name: user.name,
@@ -948,7 +1019,7 @@ app.get('/api/webhook/active-members', requireDB, requireApiKey, async (req, res
   }
 });
 
-// ===================== API: 첫 출석 회원 조회 (n8n 저널링 안내용) =====================
+// ===================== API: 첫 출석 회원 조회 (n8n 저널링 안내용 - 하위 호환) =====================
 
 app.get('/api/webhook/first-attendance-yesterday', requireDB, requireApiKey, async (req, res) => {
   const pool = getPool();

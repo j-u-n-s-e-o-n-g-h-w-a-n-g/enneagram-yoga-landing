@@ -118,6 +118,18 @@ async function initDB() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_applications_email ON applications (email);`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_applications_phone ON applications (phone);`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_applications_status ON applications (status);`);
+    // Journaling SMS log (저널링 SMS 발송 이력 추적)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS journaling_sms_log (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        class_pass_id INTEGER REFERENCES class_passes(id) ON DELETE CASCADE,
+        send_type VARCHAR(20) NOT NULL,
+        sent_at TIMESTAMP DEFAULT NOW(),
+        send_day_of_week INTEGER NOT NULL
+      );
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_journaling_sms_user_pass ON journaling_sms_log (user_id, class_pass_id);`);
     dbReady = true;
     console.log('✅ Database tables initialized successfully');
   } catch (err) {
