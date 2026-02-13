@@ -276,6 +276,7 @@ async function loadPayments(status,search) {
         const confirmedDate = new Date(p.confirmed_at).toLocaleDateString('ko-KR');
         action = '<span style="font-size:0.7rem;color:#888">' + confirmedDate + ' 확인</span>';
       }
+      action += ' <button class="action-btn danger" style="margin-left:4px;padding:4px 10px;font-size:0.65rem" onclick="deletePayment(' + p.id + ',\'' + (p.user_name||'').replace(/'/g,"\\'") + '\',' + p.amount + ')">삭제</button>';
       html += '<tr><td>' + date + '</td><td>' + p.user_name + '</td><td>' + p.user_phone + '</td><td>' + (p.depositor_name || '-') + '</td><td>' + p.amount.toLocaleString() + '원</td><td><span class="badge ' + badge + '">' + label + '</span></td><td>' + action + '</td></tr>';
     });
     html += '</tbody></table>';
@@ -519,6 +520,16 @@ async function confirmPayment(id) {
     const data = await res.json();
     if (data.success) { loadDashboard(); }
     else { alert(data.error); }
+  } catch (err) { alert('오류가 발생했습니다'); }
+}
+
+async function deletePayment(id, name, amount) {
+  if (!confirm(name + '님의 입금 내역(' + (amount||0).toLocaleString() + '원)을 삭제하시겠습니까?\n\n⚠ 이 작업은 되돌릴 수 없습니다.')) return;
+  try {
+    const res = await fetch('/api/admin/payments/' + id, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.success) { loadDashboard(); }
+    else { alert(data.error || '삭제 실패'); }
   } catch (err) { alert('오류가 발생했습니다'); }
 }
 
