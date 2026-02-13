@@ -141,6 +141,18 @@ async function initDB() {
       );
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_care_sms_user_pass ON care_sms_log (user_id, class_pass_id, sms_type);`);
+    // Credit logs (이용권 횟수 추가 이력)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS credit_logs (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        class_pass_id INTEGER REFERENCES class_passes(id) ON DELETE CASCADE,
+        credits INTEGER NOT NULL,
+        note VARCHAR(255),
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_credit_logs_user ON credit_logs (user_id);`);
     dbReady = true;
     console.log('✅ Database tables initialized successfully');
   } catch (err) {
