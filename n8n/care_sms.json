@@ -123,9 +123,9 @@
             {
               "id": "sms-success-check-care",
               "leftValue": "={{ $json.statusCode }}",
-              "rightValue": "2000",
+              "rightValue": 2000,
               "operator": {
-                "type": "string",
+                "type": "number",
                 "operation": "equals"
               }
             }

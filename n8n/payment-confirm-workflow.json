@@ -69,10 +69,10 @@
     },
     {
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst apiKey = 'NCSXADOHZXIOWSXG';\nconst apiSecret = 'E6SA8I6NCT04MKTQN8TX0Y4SSGHEJMGR';\n\nconst date = new Date().toISOString();\nconst salt = crypto.randomBytes(32).toString('hex');\nconst hmac = crypto.createHmac('sha256', apiSecret);\nhmac.update(date + salt);\nconst signature = hmac.digest('hex');\nconst authHeader = 'HMAC-SHA256 apiKey=' + apiKey + ', date=' + date + ', salt=' + salt + ', signature=' + signature;\n\nreturn [{\n  json: {\n    ...$json,\n    auth_header: authHeader\n  }\n}];"
+        "jsCode": "const crypto = require('crypto');\nconst apiKey = 'NCSXADOHZXIOWSXG';\nconst apiSecret = 'E6SA8I6NCT04MKTQN8TX0Y4SSGHEJMGR';\n\n// Clean phone number\nconst cleanPhone = ($json.user_phone || '').replace(/[-\\s]/g, '');\n\n// Generate HMAC auth\nconst date = new Date().toISOString();\nconst salt = crypto.randomBytes(32).toString('hex');\nconst hmac = crypto.createHmac('sha256', apiSecret);\nhmac.update(date + salt);\nconst signature = hmac.digest('hex');\nconst authHeader = 'HMAC-SHA256 apiKey=' + apiKey + ', date=' + date + ', salt=' + salt + ', signature=' + signature;\n\n// Prepare SMS message\nconst smsText = '[에니어그램 요가] ' + $json.user_name + '님, 회원가입이 완료되었습니다.\\n\\n로그인: https://junseonghwang.com/login\\n임시비밀번호: ' + $json.temp_password + '\\n\\n마이페이지에서 비밀번호를 변경해주세요.';\n\nreturn [{\n  json: {\n    phone: cleanPhone,\n    name: $json.user_name,\n    message: smsText,\n    auth_header: authHeader\n  }\n}];"
       },
       "id": "hmac-auth-payment",
-      "name": "HMAC Auth",
+      "name": "Prepare SMS & Auth",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [1000, 200]
@@ -92,11 +92,11 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"message\": {\n    \"to\": \"{{ $json.user_phone.replace(/[-\\\\s]/g, '') }}\",\n    \"from\": \"07079548182\",\n    \"text\": \"[에니어그램 요가] {{ $json.user_name }}님, 회원가입이 완료되었습니다.\\\\n\\\\n로그인: https://junseonghwang.com/login\\\\n임시비밀번호: {{ $json.temp_password }}\\\\n\\\\n마이페이지에서 비밀번호를 변경해주세요.\",\n    \"type\": \"LMS\"\n  }\n}",
+        "jsonBody": "={{ JSON.stringify({ message: { to: $json.phone, from: '07079548182', text: $json.message, type: 'LMS' } }) }}",
         "options": {}
       },
       "id": "solapi-sms",
-      "name": "Solapi SMS 발송",
+      "name": "Send SMS via Solapi",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [1220, 200]
@@ -137,7 +137,7 @@
       "main": [
         [
           {
-            "node": "HMAC Auth",
+            "node": "Prepare SMS & Auth",
             "type": "main",
             "index": 0
           }
@@ -151,11 +151,11 @@
         ]
       ]
     },
-    "HMAC Auth": {
+    "Prepare SMS & Auth": {
       "main": [
         [
           {
-            "node": "Solapi SMS 발송",
+            "node": "Send SMS via Solapi",
             "type": "main",
             "index": 0
           }
