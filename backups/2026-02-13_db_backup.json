@@ -1,0 +1,193 @@
+{
+  "backup_date": "2026-02-13T14:48:40.502Z",
+  "counts": {
+    "users": 3,
+    "applications": 4,
+    "class_passes": 5,
+    "payments": 5,
+    "attendance": 0
+  },
+  "data": {
+    "users": [
+      {
+        "id": 1,
+        "name": "황준성",
+        "email": "junseong@junseonghwang.com",
+        "phone": "01087993621",
+        "role": "admin",
+        "password_is_temp": false,
+        "created_at": "2026-02-11T07:38:09.365Z"
+      },
+      {
+        "id": 2,
+        "name": "테스트",
+        "email": "test@test.com",
+        "phone": "01012348765",
+        "role": "member",
+        "password_is_temp": false,
+        "created_at": "2026-02-11T07:38:41.135Z"
+      },
+      {
+        "id": 7,
+        "name": "이효은",
+        "email": "thereadingmaker@gmail.com",
+        "phone": "01054786145",
+        "role": "member",
+        "password_is_temp": true,
+        "created_at": "2026-02-13T11:54:27.939Z"
+      }
+    ],
+    "applications": [
+      {
+        "id": 8,
+        "name": "이효은",
+        "email": "thereadingmaker@gmail.com",
+        "phone": "01054786145",
+        "status": "paid",
+        "user_id": 7,
+        "created_at": "2026-02-13T11:53:33.334Z",
+        "paid_at": "2026-02-13T11:54:27.939Z"
+      },
+      {
+        "id": 9,
+        "name": "이효은",
+        "email": "thereadingmaker@gmail.com",
+        "phone": "01054786145",
+        "status": "paid",
+        "user_id": 7,
+        "created_at": "2026-02-13T12:20:43.792Z",
+        "paid_at": "2026-02-13T12:21:14.718Z"
+      },
+      {
+        "id": 10,
+        "name": "이효은",
+        "email": "thereadingmaker@gmail.com",
+        "phone": "01054786145",
+        "status": "paid",
+        "user_id": 7,
+        "created_at": "2026-02-13T12:38:57.365Z",
+        "paid_at": "2026-02-13T12:39:33.018Z"
+      },
+      {
+        "id": 11,
+        "name": "이효은",
+        "email": "thereadingmaker@gmail.com",
+        "phone": "01054786145",
+        "status": "paid",
+        "user_id": 7,
+        "created_at": "2026-02-13T12:51:34.169Z",
+        "paid_at": "2026-02-13T12:57:56.238Z"
+      }
+    ],
+    "class_passes": [
+      {
+        "id": 3,
+        "user_id": 2,
+        "total_classes": 4,
+        "remaining_classes": 4,
+        "purchased_at": "2026-02-13T07:21:25.677Z",
+        "expires_at": "2026-05-13T07:21:25.677Z",
+        "status": "active"
+      },
+      {
+        "id": 7,
+        "user_id": 7,
+        "total_classes": 12,
+        "remaining_classes": 12,
+        "purchased_at": "2026-02-13T11:54:27.939Z",
+        "expires_at": "2026-05-13T11:54:27.939Z",
+        "status": "active"
+      },
+      {
+        "id": 8,
+        "user_id": 7,
+        "total_classes": 12,
+        "remaining_classes": 12,
+        "purchased_at": "2026-02-13T12:21:14.718Z",
+        "expires_at": "2026-05-13T12:21:14.718Z",
+        "status": "active"
+      },
+      {
+        "id": 9,
+        "user_id": 7,
+        "total_classes": 12,
+        "remaining_classes": 12,
+        "purchased_at": "2026-02-13T12:39:33.018Z",
+        "expires_at": "2026-05-13T12:39:33.018Z",
+        "status": "active"
+      },
+      {
+        "id": 10,
+        "user_id": 7,
+        "total_classes": 12,
+        "remaining_classes": 12,
+        "purchased_at": "2026-02-13T12:57:56.238Z",
+        "expires_at": "2026-05-13T12:57:56.238Z",
+        "status": "active"
+      }
+    ],
+    "payments": [
+      {
+        "id": 11,
+        "user_id": 7,
+        "class_pass_id": 7,
+        "amount": 99000,
+        "method": "bank_transfer",
+        "status": "confirmed",
+        "depositor_name": "이효은",
+        "confirmed_at": "2026-02-13T11:54:27.939Z",
+        "created_at": "2026-02-13T11:54:27.939Z",
+        "transaction_id": null
+      },
+      {
+        "id": 12,
+        "user_id": 7,
+        "class_pass_id": 8,
+        "amount": 99000,
+        "method": "bank_transfer",
+        "status": "confirmed",
+        "depositor_name": "이효은",
+        "confirmed_at": "2026-02-13T12:21:14.718Z",
+        "created_at": "2026-02-13T12:21:14.718Z",
+        "transaction_id": null
+      },
+      {
+        "id": 13,
+        "user_id": 7,
+        "class_pass_id": 9,
+        "amount": 99000,
+        "method": "bank_transfer",
+        "status": "confirmed",
+        "depositor_name": "이효은",
+        "confirmed_at": "2026-02-13T12:39:33.018Z",
+        "created_at": "2026-02-13T12:39:33.018Z",
+        "transaction_id": null
+      },
+      {
+        "id": 14,
+        "user_id": 7,
+        "class_pass_id": null,
+        "amount": 9000,
+        "method": "bank_transfer",
+        "status": "underpaid",
+        "depositor_name": "이효은",
+        "confirmed_at": "2026-02-13T12:52:02.903Z",
+        "created_at": "2026-02-13T12:52:02.903Z",
+        "transaction_id": null
+      },
+      {
+        "id": 15,
+        "user_id": 7,
+        "class_pass_id": 10,
+        "amount": 99000,
+        "method": "bank_transfer",
+        "status": "confirmed",
+        "depositor_name": "이효은",
+        "confirmed_at": "2026-02-13T12:57:56.238Z",
+        "created_at": "2026-02-13T12:57:56.238Z",
+        "transaction_id": null
+      }
+    ],
+    "attendance": []
+  }
+}
