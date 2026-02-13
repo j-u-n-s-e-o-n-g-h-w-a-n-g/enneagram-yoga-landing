@@ -827,6 +827,10 @@ app.get('/api/admin/members/:id', requireDB, requireAdmin, async (req, res) => {
       'SELECT a.*, cp.total_classes, cp.remaining_classes as pass_remaining FROM attendance a LEFT JOIN class_passes cp ON a.class_pass_id = cp.id WHERE a.user_id = $1 ORDER BY a.attended_at DESC',
       [userId]
     );
+    const creditLogsResult = await pool.query(
+      'SELECT * FROM credit_logs WHERE user_id = $1 ORDER BY created_at DESC',
+      [userId]
+    );
     const totalAttended = attendanceResult.rows.length;
     const activePasses = passResult.rows.filter(p => p.status === 'active' && p.remaining_classes > 0);
     const totalRemaining = activePasses.reduce((sum, p) => sum + p.remaining_classes, 0);
@@ -835,6 +839,7 @@ app.get('/api/admin/members/:id', requireDB, requireAdmin, async (req, res) => {
       passes: passResult.rows,
       payments: paymentResult.rows,
       attendance: attendanceResult.rows,
+      credit_logs: creditLogsResult.rows,
       stats: { total_attended: totalAttended, total_remaining: totalRemaining, active_passes: activePasses.length }
     });
   } catch (err) {
@@ -889,6 +894,7 @@ app.delete('/api/admin/members/:id', requireDB, requireAdmin, async (req, res) =
     await client.query('DELETE FROM attendance WHERE user_id = $1', [userId]);
     await client.query('DELETE FROM care_sms_log WHERE user_id = $1', [userId]);
     await client.query('DELETE FROM journaling_sms_log WHERE user_id = $1', [userId]);
+    await client.query('DELETE FROM credit_logs WHERE user_id = $1', [userId]);
     await client.query('DELETE FROM class_passes WHERE user_id = $1', [userId]);
     await client.query('DELETE FROM payments WHERE user_id = $1', [userId]);
     await client.query('DELETE FROM users WHERE id = $1', [userId]);
@@ -935,6 +941,11 @@ app.post('/api/admin/members/:id/add-credits', requireDB, requireAdmin, async (r
       );
       passId = newPass.rows[0].id;
     }
+    // 이력 기록
+    await client.query(
+      'INSERT INTO credit_logs (user_id, class_pass_id, credits, note) VALUES ($1, $2, $3, $4)',
+      [userId, passId, addCount, note || null]
+    );
     await client.query('COMMIT');
     const updated = await pool.query(
       "SELECT COALESCE(SUM(remaining_classes), 0) as total_remaining FROM class_passes WHERE user_id = $1 AND status = 'active'",
