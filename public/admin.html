@@ -95,6 +95,25 @@ table tr.clickable:hover{background:var(--section-bg)}
 .add-credits-form input[type="number"]:focus{border-color:var(--accent)}
 .add-credits-form input[type="text"]{flex:1;padding:8px 12px;border:1px solid var(--border);background:var(--white);font-family:'Noto Serif KR',serif;font-size:0.82rem;outline:none}
 .add-credits-form input[type="text"]:focus{border-color:var(--accent)}
+/* Loading spinner */
+.loading{text-align:center;padding:30px;color:var(--accent)}
+.loading::after{content:'';display:inline-block;width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.6s linear infinite;margin-left:8px;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* Toast notification */
+.toast{position:fixed;bottom:24px;right:24px;background:var(--text);color:var(--white);padding:14px 24px;border-radius:4px;font-size:0.82rem;z-index:2000;opacity:0;transform:translateY(10px);transition:all 0.3s;pointer-events:none}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast.error{background:#c44}
+.toast.success{background:#2e7d32}
+/* Pagination */
+.pagination{display:flex;justify-content:center;align-items:center;gap:8px;margin-top:16px;padding:12px 0}
+.pagination button{padding:6px 14px;border:1px solid var(--border);background:transparent;color:var(--text);font-family:'Cormorant Garamond',serif;font-size:0.78rem;cursor:pointer;transition:all 0.2s}
+.pagination button.active{background:var(--accent);color:var(--white);border-color:var(--accent)}
+.pagination button:disabled{opacity:0.4;cursor:default}
+.pagination .page-info{font-size:0.75rem;color:#888}
+/* Date filter */
+.date-filter{display:flex;gap:8px;align-items:center;margin-bottom:16px}
+.date-filter input[type="date"]{padding:6px 10px;border:1px solid var(--border);font-family:'Noto Serif KR',serif;font-size:0.8rem;outline:none}
+.date-filter input[type="date"]:focus{border-color:var(--accent)}
 footer{padding:40px;border-top:1px solid var(--border);text-align:center;margin-top:auto}
 footer .logo-img{height:28px;width:auto;margin-bottom:8px}
 footer p{font-size:0.7rem;color:#999;font-weight:300}
@@ -131,7 +150,7 @@ footer p{font-size:0.7rem;color:#999;font-weight:300}
 <button class="filter-btn" onclick="filterPayments('pending', this)">입금대기</button>
 <button class="filter-btn" onclick="filterPayments('confirmed', this)">확인완료</button>
 </div>
-<div class="section-box"><div id="paymentList"><div class="empty-state">결제 내역이 없습니다</div></div></div>
+<div class="section-box"><div id="paymentList"><div class="empty-state">결제 내역이 없습니다</div></div><div id="paymentPagination"></div></div>
 </div>
 <div class="tab-content" id="tab-members">
 <div style="margin-bottom:16px"><input type="text" id="searchMembers" placeholder="이름, 이메일, 전화번호로 검색..." style="width:100%;padding:10px;border:1px solid var(--border);font-family:'Noto Serif KR',serif;font-size:0.82rem;outline:none" onkeyup="if(event.key==='Enter')searchMembersFn()"><button class="action-btn small" style="margin-top:8px" onclick="searchMembersFn()">검색</button></div>
@@ -234,9 +253,41 @@ footer p{font-size:0.7rem;color:#999;font-weight:300}
 </div>
 </div>
 </div>
+<div class="toast" id="toast"></div>
 <footer><img class="logo-img" src="/images/signature.png" alt="Junseong Hwang"><p>&copy; 2026 Junseong Hwang. All rights reserved.</p></footer>
 <script>
 let currentMemberId = null;
+let paymentPage = 1;
+const PAGE_SIZE = 20;
+let currentPaymentStatus = 'all';
+let currentPaymentSearch = '';
+
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast ' + type + ' show';
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function showLoading(id) {
+  document.getElementById(id).innerHTML = '<div class="loading">불러오는 중</div>';
+}
+
+function renderPagination(containerId, currentPage, totalPages, onPageChange) {
+  if (totalPages <= 1) { document.getElementById(containerId).innerHTML = ''; return; }
+  let html = '<div class="pagination">';
+  html += '<button ' + (currentPage <= 1 ? 'disabled' : '') + ' onclick="' + onPageChange + '(' + (currentPage - 1) + ')">←</button>';
+  const start = Math.max(1, currentPage - 2);
+  const end = Math.min(totalPages, currentPage + 2);
+  if (start > 1) html += '<button onclick="' + onPageChange + '(1)">1</button><span class="page-info">...</span>';
+  for (let i = start; i <= end; i++) {
+    html += '<button class="' + (i === currentPage ? 'active' : '') + '" onclick="' + onPageChange + '(' + i + ')">' + i + '</button>';
+  }
+  if (end < totalPages) html += '<span class="page-info">...</span><button onclick="' + onPageChange + '(' + totalPages + ')">' + totalPages + '</button>';
+  html += '<button ' + (currentPage >= totalPages ? 'disabled' : '') + ' onclick="' + onPageChange + '(' + (currentPage + 1) + ')">→</button>';
+  html += '</div>';
+  document.getElementById(containerId).innerHTML = html;
+}
 
 async function checkAuth() {
   const res = await fetch('/api/me');
@@ -265,16 +316,24 @@ async function loadStats() {
   } catch (err) { console.error(err); }
 }
 
-async function loadPayments(status,search) {
+async function loadPayments(status, search, page) {
+  if (status !== undefined) currentPaymentStatus = status;
+  if (search !== undefined) currentPaymentSearch = search;
+  if (page !== undefined) paymentPage = page;
+  showLoading('paymentList');
   try {
-    const res = await fetch('/api/admin/payments?status=' + status + (search ? '&search=' + encodeURIComponent(search) : ''));
+    const res = await fetch('/api/admin/payments?status=' + currentPaymentStatus + (currentPaymentSearch ? '&search=' + encodeURIComponent(currentPaymentSearch) : '') + '&page=' + paymentPage + '&limit=' + PAGE_SIZE);
     const data = await res.json();
-    if (data.payments.length === 0) {
+    const payments = data.payments || [];
+    const total = (data.pagination && data.pagination.total) || data.total || payments.length;
+    const totalPages = Math.ceil(total / PAGE_SIZE) || 1;
+    if (payments.length === 0) {
       document.getElementById('paymentList').innerHTML = '<div class="empty-state">결제 내역이 없습니다</div>';
+      document.getElementById('paymentPagination').innerHTML = '';
       return;
     }
     let html = '<table><thead><tr><th>Date</th><th>Member</th><th>Phone</th><th>Depositor</th><th>Amount</th><th>Status</th><th>Action</th></tr></thead><tbody>';
-    data.payments.forEach(p => {
+    payments.forEach(p => {
       const date = new Date(p.created_at).toLocaleDateString('ko-KR');
       const badge = p.status === 'confirmed' ? 'badge-confirmed' : 'badge-pending';
       const label = p.status === 'confirmed' ? '확인완료' : '입금대기';
@@ -290,10 +349,13 @@ async function loadPayments(status,search) {
     });
     html += '</tbody></table>';
     document.getElementById('paymentList').innerHTML = html;
+    renderPagination('paymentPagination', paymentPage, totalPages, 'goPaymentPage');
   } catch (err) { console.error(err); }
 }
+function goPaymentPage(page) { loadPayments(undefined, undefined, page); }
 
 async function loadMembers(search) {
+  showLoading('memberList');
   try {
     const res = await fetch('/api/admin/members' + (search ? '?search=' + encodeURIComponent(search) : ''));
     const data = await res.json();
@@ -346,7 +408,7 @@ async function openMemberDetail(userId) {
   try {
     const res = await fetch('/api/admin/members/' + userId);
     const data = await res.json();
-    if (data.error) { alert(data.error); return; }
+    if (data.error) { showToast(data.error, 'error'); return; }
 
     // Hide main, show detail
     document.getElementById('mainView').style.display = 'none';
@@ -393,7 +455,7 @@ async function openMemberDetail(userId) {
 
   } catch (err) {
     console.error(err);
-    alert('회원 정보를 불러올 수 없습니다');
+    showToast('회원 정보를 불러올 수 없습니다', 'error');
   }
 }
 
@@ -471,7 +533,7 @@ async function addCredits() {
   if (!currentMemberId) return;
   const credits = parseInt(document.getElementById('addCreditsCount').value);
   const note = document.getElementById('addCreditsNote').value;
-  if (!credits || credits < 1) { alert('추가할 횟수를 입력해주세요'); return; }
+  if (!credits || credits < 1) { showToast('추가할 횟수를 입력해주세요', 'error'); return; }
   if (!confirm(credits + '회를 추가하시겠습니까?')) return;
 
   try {
@@ -482,16 +544,16 @@ async function addCredits() {
     });
     const data = await res.json();
     if (data.success) {
-      alert(data.added + '회가 추가되었습니다. 현재 잔여: ' + data.total_remaining + '회');
+      showToast(data.added + '회가 추가되었습니다. 현재 잔여: ' + data.total_remaining + '회', 'success');
       document.getElementById('addCreditsCount').value = '1';
       document.getElementById('addCreditsNote').value = '';
       openMemberDetail(currentMemberId);
       loadStats();
     } else {
-      alert(data.error || '오류가 발생했습니다');
+      showToast(data.error || '오류가 발생했습니다', 'error');
     }
   } catch (err) {
-    alert('오류가 발생했습니다');
+    showToast('오류가 발생했습니다', 'error');
   }
 }
 
@@ -551,10 +613,10 @@ async function resendNotification(type) {
       body: JSON.stringify({ type })
     });
     const data = await res.json();
-    alert(data.message || data.error || '처리되었습니다');
+    showToast(data.message || data.error || '처리되었습니다', data.success ? 'success' : 'error');
     loadNotifications(currentMemberId);
   } catch (err) {
-    alert('오류가 발생했습니다');
+    showToast('오류가 발생했습니다', 'error');
   }
 }
 
@@ -587,9 +649,9 @@ async function confirmPayment(id) {
   try {
     const res = await fetch('/api/admin/payments/' + id + '/confirm', { method: 'POST' });
     const data = await res.json();
-    if (data.success) { loadDashboard(); }
-    else { alert(data.error); }
-  } catch (err) { alert('오류가 발생했습니다'); }
+    if (data.success) { showToast('입금 확인 완료', 'success'); loadDashboard(); }
+    else { showToast(data.error, 'error'); }
+  } catch (err) { showToast('오류가 발생했습니다', 'error'); }
 }
 
 async function deletePayment(id, name, amount) {
@@ -597,9 +659,9 @@ async function deletePayment(id, name, amount) {
   try {
     const res = await fetch('/api/admin/payments/' + id, { method: 'DELETE' });
     const data = await res.json();
-    if (data.success) { loadDashboard(); }
-    else { alert(data.error || '삭제 실패'); }
-  } catch (err) { alert('오류가 발생했습니다'); }
+    if (data.success) { showToast('결제 삭제 완료', 'success'); loadDashboard(); }
+    else { showToast(data.error || '삭제 실패', 'error'); }
+  } catch (err) { showToast('오류가 발생했습니다', 'error'); }
 }
 
 async function markAttend(userId) {
@@ -611,9 +673,9 @@ async function markAttend(userId) {
       body: JSON.stringify({ note: new Date().toLocaleDateString('ko-KR') + ' 수업' })
     });
     const data = await res.json();
-    if (data.success) { loadDashboard(); }
-    else { alert(data.error); }
-  } catch (err) { alert('오류가 발생했습니다'); }
+    if (data.success) { showToast('출석 처리 완료', 'success'); loadDashboard(); }
+    else { showToast(data.error, 'error'); }
+  } catch (err) { showToast('오류가 발생했습니다', 'error'); }
 }
 
 function switchTab(tab) {
@@ -660,7 +722,7 @@ async function saveMemberEdit() {
   const name = document.getElementById('editName').value.trim();
   const email = document.getElementById('editEmail').value.trim();
   const phone = document.getElementById('editPhone').value.trim();
-  if (!name) { alert('이름을 입력해주세요'); return; }
+  if (!name) { showToast('이름을 입력해주세요', 'error'); return; }
   try {
     const res = await fetch('/api/admin/members/' + currentMemberId, {
       method: 'PUT',
@@ -669,14 +731,14 @@ async function saveMemberEdit() {
     });
     const data = await res.json();
     if (data.success) {
-      alert('회원 정보가 수정되었습니다');
+      showToast('회원 정보가 수정되었습니다', 'success');
       document.getElementById('editForm').classList.remove('active');
       openMemberDetail(currentMemberId);
     } else {
-      alert(data.error || '오류가 발생했습니다');
+      showToast(data.error || '오류가 발생했습니다', 'error');
     }
   } catch (err) {
-    alert('오류가 발생했습니다');
+    showToast('오류가 발생했습니다', 'error');
   }
 }
 
@@ -697,13 +759,13 @@ async function deleteMember() {
     const res = await fetch('/api/admin/members/' + currentMemberId, { method: 'DELETE' });
     const data = await res.json();
     if (data.success) {
-      alert(data.message);
+      showToast(data.message, 'success');
       closeDetail();
     } else {
-      alert(data.error || '오류가 발생했습니다');
+      showToast(data.error || '오류가 발생했습니다', 'error');
     }
   } catch (err) {
-    alert('오류가 발생했습니다');
+    showToast('오류가 발생했습니다', 'error');
   }
 }
 
@@ -731,7 +793,7 @@ async function saveAppEdit() {
   const name = document.getElementById('appEditName').value.trim();
   const email = document.getElementById('appEditEmail').value.trim();
   const phone = document.getElementById('appEditPhone').value.trim();
-  if (!name) { alert('이름을 입력해주세요'); return; }
+  if (!name) { showToast('이름을 입력해주세요', 'error'); return; }
   try {
     const res = await fetch('/api/admin/applications/' + currentAppEditId, {
       method: 'PUT',
@@ -740,14 +802,14 @@ async function saveAppEdit() {
     });
     const data = await res.json();
     if (data.success) {
-      alert('신청 정보가 수정되었습니다');
+      showToast('신청 정보가 수정되었습니다', 'success');
       closeAppEdit();
       loadApplications(document.querySelector('#tab-applications .filter-btn.active')?.textContent === '대기' ? 'pending' : document.querySelector('#tab-applications .filter-btn.active')?.textContent === '입금완료' ? 'paid' : 'all');
     } else {
-      alert(data.error || '오류가 발생했습니다');
+      showToast(data.error || '오류가 발생했습니다', 'error');
     }
   } catch (err) {
-    alert('오류가 발생했습니다');
+    showToast('오류가 발생했습니다', 'error');
   }
 }
 
@@ -757,14 +819,14 @@ async function deleteApplication(id, name) {
     const res = await fetch('/api/admin/applications/' + id, { method: 'DELETE' });
     const data = await res.json();
     if (data.success) {
-      alert(data.message);
+      showToast(data.message, 'success');
       loadApplications(document.querySelector('#tab-applications .filter-btn.active')?.textContent === '대기' ? 'pending' : document.querySelector('#tab-applications .filter-btn.active')?.textContent === '입금완료' ? 'paid' : 'all');
       loadStats();
     } else {
-      alert(data.error || '오류가 발생했습니다');
+      showToast(data.error || '오류가 발생했습니다', 'error');
     }
   } catch (err) {
-    alert('오류가 발생했습니다');
+    showToast('오류가 발생했습니다', 'error');
   }
 }
 

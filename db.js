@@ -167,6 +167,18 @@ async function initDB() {
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_notification_log_user ON notification_log (user_id);`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_notification_log_payment ON notification_log (payment_id);`);
+    // Performance indexes for frequently queried columns
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_users_phone ON users (phone);`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_users_email ON users (email);`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_class_passes_user ON class_passes (user_id);`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_class_passes_status ON class_passes (status);`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_class_passes_user_status ON class_passes (user_id, status);`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_payments_user ON payments (user_id);`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_payments_status ON payments (status);`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_attendance_user ON attendance (user_id);`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance (attended_at);`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_attendance_user_date ON attendance (user_id, attended_at);`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_attendance_zoom_uuid ON attendance (zoom_meeting_uuid);`);
     dbReady = true;
     console.log('✅ Database tables initialized successfully');
   } catch (err) {
