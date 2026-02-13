@@ -1416,9 +1416,10 @@ app.post('/api/webhook/issue-cashreceipt', requireDB, requireApiKey, async (req,
     const issueResp = await fetch(ApiBase + '/Cashbill', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/json;charset=utf-8',
         'Authorization': 'Bearer ' + tokenData.session_token,
-        'x-pb-userid': 'ADMIN'
+        'X-HTTP-Method-Override': 'ISSUE',
+        'User-Agent': 'NODEJS POPBILL SDK'
       },
       body: JSON.stringify(cashbill)
     });
