@@ -206,6 +206,21 @@ footer p{font-size:0.7rem;color:#999;font-weight:300}
 </div>
 </div>
 </div>
+<!-- Application Edit Overlay -->
+<div class="confirm-overlay" id="appEditOverlay">
+<div class="confirm-box" style="text-align:left;max-width:440px">
+<p style="font-size:0.9rem;font-weight:500;margin-bottom:16px">신청 정보 수정</p>
+<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
+<div style="display:flex;gap:10px;align-items:center"><label style="width:60px;font-size:0.78rem;flex-shrink:0">이름</label><input type="text" id="appEditName" style="flex:1;padding:8px 12px;border:1px solid var(--border);font-family:'Noto Serif KR',serif;font-size:0.85rem;outline:none"></div>
+<div style="display:flex;gap:10px;align-items:center"><label style="width:60px;font-size:0.78rem;flex-shrink:0">이메일</label><input type="text" id="appEditEmail" style="flex:1;padding:8px 12px;border:1px solid var(--border);font-family:'Noto Serif KR',serif;font-size:0.85rem;outline:none"></div>
+<div style="display:flex;gap:10px;align-items:center"><label style="width:60px;font-size:0.78rem;flex-shrink:0">연락처</label><input type="text" id="appEditPhone" style="flex:1;padding:8px 12px;border:1px solid var(--border);font-family:'Noto Serif KR',serif;font-size:0.85rem;outline:none"></div>
+</div>
+<div class="confirm-actions">
+<button class="action-btn" onclick="saveAppEdit()">저장</button>
+<button class="action-btn" onclick="closeAppEdit()" style="color:#888;border-color:#ccc">취소</button>
+</div>
+</div>
+</div>
 <footer><img class="logo-img" src="/images/signature.png" alt="Junseong Hwang"><p>&copy; 2026 Junseong Hwang. All rights reserved.</p></footer>
 <script>
 let currentMemberId = null;
@@ -290,12 +305,15 @@ async function loadApplications(status){
       document.getElementById('applicationList').innerHTML='<div class="empty-state">신청 내역이 없습니다</div>';
       return;
     }
-    let html='<table><thead><tr><th>Date</th><th>Name</th><th>Email</th><th>Phone</th><th>Status</th></tr></thead><tbody>';
+    let html='<table><thead><tr><th>Date</th><th>Name</th><th>Email</th><th>Phone</th><th>Status</th><th>Action</th></tr></thead><tbody>';
     data.applications.forEach(a=>{
       const date=new Date(a.created_at).toLocaleDateString('ko-KR');
       const badge=a.status==='paid'?'badge-confirmed':'badge-pending';
       const label=a.status==='paid'?'입금완료':'대기';
-      html+='<tr><td>'+date+'</td><td>'+a.name+'</td><td>'+a.email+'</td><td>'+a.phone+'</td><td><span class="badge '+badge+'">'+label+'</span></td></tr>';
+      const safeN=a.name.replace(/'/g,"\\'");
+      const safeE=a.email.replace(/'/g,"\\'");
+      const safeP=(a.phone||'').replace(/'/g,"\\'");
+      html+='<tr><td>'+date+'</td><td>'+a.name+'</td><td>'+a.email+'</td><td>'+a.phone+'</td><td><span class="badge '+badge+'">'+label+'</span></td><td><button class="action-btn small" onclick="event.stopPropagation();openAppEdit('+a.id+',\''+safeN+'\',\''+safeE+'\',\''+safeP+'\')">수정</button> <button class="action-btn small danger" onclick="event.stopPropagation();deleteApplication('+a.id+',\''+safeN+'\')">삭제</button></td></tr>';
     });
     html+='</tbody></table>';
     document.getElementById('applicationList').innerHTML=html;
@@ -587,6 +605,65 @@ async function deleteMember() {
 }
 
 function toggleMenu(){document.querySelector('nav ul').classList.toggle('open');}
+
+// ========== Application Edit / Delete ==========
+
+let currentAppEditId = null;
+
+function openAppEdit(id, name, email, phone) {
+  currentAppEditId = id;
+  document.getElementById('appEditName').value = name || '';
+  document.getElementById('appEditEmail').value = email || '';
+  document.getElementById('appEditPhone').value = phone || '';
+  document.getElementById('appEditOverlay').classList.add('active');
+}
+
+function closeAppEdit() {
+  currentAppEditId = null;
+  document.getElementById('appEditOverlay').classList.remove('active');
+}
+
+async function saveAppEdit() {
+  if (!currentAppEditId) return;
+  const name = document.getElementById('appEditName').value.trim();
+  const email = document.getElementById('appEditEmail').value.trim();
+  const phone = document.getElementById('appEditPhone').value.trim();
+  if (!name) { alert('이름을 입력해주세요'); return; }
+  try {
+    const res = await fetch('/api/admin/applications/' + currentAppEditId, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, phone })
+    });
+    const data = await res.json();
+    if (data.success) {
+      alert('신청 정보가 수정되었습니다');
+      closeAppEdit();
+      loadApplications(document.querySelector('#tab-applications .filter-btn.active')?.textContent === '대기' ? 'pending' : document.querySelector('#tab-applications .filter-btn.active')?.textContent === '입금완료' ? 'paid' : 'all');
+    } else {
+      alert(data.error || '오류가 발생했습니다');
+    }
+  } catch (err) {
+    alert('오류가 발생했습니다');
+  }
+}
+
+async function deleteApplication(id, name) {
+  if (!confirm(name + '님의 신청 내역을 삭제하시겠습니까?')) return;
+  try {
+    const res = await fetch('/api/admin/applications/' + id, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.success) {
+      alert(data.message);
+      loadApplications(document.querySelector('#tab-applications .filter-btn.active')?.textContent === '대기' ? 'pending' : document.querySelector('#tab-applications .filter-btn.active')?.textContent === '입금완료' ? 'paid' : 'all');
+      loadStats();
+    } else {
+      alert(data.error || '오류가 발생했습니다');
+    }
+  } catch (err) {
+    alert('오류가 발생했습니다');
+  }
+}
 
 checkAuth();
 </script>

@@ -1141,6 +1141,54 @@ app.get('/api/admin/applications', requireDB, requireAdmin, async (req, res) => 
   }
 });
 
+// ===================== ADMIN: 신청 정보 수정 =====================
+
+app.put('/api/admin/applications/:id', requireDB, requireAdmin, async (req, res) => {
+  const pool = getPool();
+  try {
+    const appId = req.params.id;
+    const { name, email, phone } = req.body;
+    if (!name || !name.trim()) return res.status(400).json({ error: '이름을 입력해주세요' });
+
+    // 같은 이메일의 다른 pending 신청이 있는지 확인
+    if (email && email.trim()) {
+      const dup = await pool.query(
+        "SELECT id FROM applications WHERE email = $1 AND id != $2 AND status = 'pending'",
+        [email.trim(), appId]
+      );
+      if (dup.rows.length > 0) return res.status(400).json({ error: '동일 이메일의 대기 중인 신청이 이미 있습니다' });
+    }
+
+    const result = await pool.query(
+      'UPDATE applications SET name = $1, email = $2, phone = $3 WHERE id = $4 RETURNING id, name, email, phone, status',
+      [name.trim(), (email || '').trim(), (phone || '').trim(), appId]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: '신청 내역을 찾을 수 없습니다' });
+    res.json({ success: true, application: result.rows[0] });
+  } catch (err) {
+    console.error('Admin application update error:', err);
+    res.status(500).json({ error: '서버 오류' });
+  }
+});
+
+// ===================== ADMIN: 신청 삭제 =====================
+
+app.delete('/api/admin/applications/:id', requireDB, requireAdmin, async (req, res) => {
+  const pool = getPool();
+  try {
+    const appId = req.params.id;
+    const appCheck = await pool.query('SELECT id, name, status FROM applications WHERE id = $1', [appId]);
+    if (appCheck.rows.length === 0) return res.status(404).json({ error: '신청 내역을 찾을 수 없습니다' });
+
+    const appName = appCheck.rows[0].name;
+    await pool.query('DELETE FROM applications WHERE id = $1', [appId]);
+    res.json({ success: true, message: appName + '님의 신청 내역이 삭제되었습니다' });
+  } catch (err) {
+    console.error('Admin application delete error:', err);
+    res.status(500).json({ error: '서버 오류' });
+  }
+});
+
 // ===================== API: 잔여횟수 있는 회원 조회 (n8n용) =====================
 
 app.get('/api/webhook/active-members', requireDB, requireApiKey, async (req, res) => {
