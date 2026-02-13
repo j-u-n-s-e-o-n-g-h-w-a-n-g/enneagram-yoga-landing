@@ -153,6 +153,20 @@ async function initDB() {
       );
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_credit_logs_user ON credit_logs (user_id);`);
+    // Notification log (SMS/Email/현금영수증 발송 이력)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS notification_log (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        payment_id INTEGER REFERENCES payments(id) ON DELETE SET NULL,
+        type VARCHAR(30) NOT NULL,
+        status VARCHAR(20) DEFAULT 'success',
+        detail JSONB,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_notification_log_user ON notification_log (user_id);`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_notification_log_payment ON notification_log (payment_id);`);
     dbReady = true;
     console.log('✅ Database tables initialized successfully');
   } catch (err) {

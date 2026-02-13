@@ -626,6 +626,17 @@ app.post('/api/webhook/send-sms', requireDB, requireApiKey, async (req, res) => 
       }
     }
 
+    // Log to notification_log
+    if (req.body.user_id || req.body.payment_id) {
+      try {
+        const pool = getPool();
+        await pool.query(
+          'INSERT INTO notification_log (user_id, payment_id, type, status, detail) VALUES ($1, $2, $3, $4, $5)',
+          [req.body.user_id || null, req.body.payment_id || null, 'sms', success ? 'success' : 'failed', JSON.stringify({ groupId: result.groupId, statusCode: result.statusCode, phone: cleanPhone })]
+        );
+      } catch (logErr) { console.error('notification_log insert error:', logErr); }
+    }
+
     res.json({
       success,
       statusCode: result.statusCode || null,
@@ -668,6 +679,18 @@ app.post('/api/webhook/send-email', requireDB, requireApiKey, async (req, res) =
 
     const result = await response.json();
     const success = !!result.id;
+
+    // Log to notification_log
+    if (req.body.user_id || req.body.payment_id) {
+      try {
+        const pool = getPool();
+        await pool.query(
+          'INSERT INTO notification_log (user_id, payment_id, type, status, detail) VALUES ($1, $2, $3, $4, $5)',
+          [req.body.user_id || null, req.body.payment_id || null, 'email', success ? 'success' : 'failed', JSON.stringify({ email_id: result.id, to })]
+        );
+      } catch (logErr) { console.error('notification_log insert error:', logErr); }
+    }
+
     res.json({ success, email_id: result.id || null, detail: success ? null : result });
   } catch (err) {
     console.error('Send Email API error:', err);
@@ -1306,6 +1329,137 @@ app.delete('/api/admin/applications/:id', requireDB, requireAdmin, async (req, r
   }
 });
 
+// ===================== ADMIN: 알림 발송 내역 조회 =====================
+
+app.get('/api/admin/members/:id/notifications', requireDB, requireAdmin, async (req, res) => {
+  const pool = getPool();
+  try {
+    const userId = req.params.id;
+    const result = await pool.query(
+      'SELECT nl.*, p.amount as payment_amount, p.depositor_name FROM notification_log nl LEFT JOIN payments p ON nl.payment_id = p.id WHERE nl.user_id = $1 ORDER BY nl.created_at DESC LIMIT 50',
+      [userId]
+    );
+    res.json({ notifications: result.rows });
+  } catch (err) {
+    console.error('Notification log error:', err);
+    res.status(500).json({ error: '서버 오류' });
+  }
+});
+
+// ===================== ADMIN: 수동 재발송 =====================
+
+app.post('/api/admin/members/:id/resend', requireDB, requireAdmin, async (req, res) => {
+  const pool = getPool();
+  try {
+    const userId = req.params.id;
+    const { type } = req.body; // sms, email, cashreceipt
+
+    // Get user info
+    const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
+    if (userResult.rows.length === 0) return res.status(404).json({ error: '회원을 찾을 수 없습니다' });
+    const user = userResult.rows[0];
+
+    // Get latest confirmed payment
+    const payResult = await pool.query(
+      "SELECT * FROM payments WHERE user_id = $1 AND status = 'confirmed' ORDER BY confirmed_at DESC LIMIT 1",
+      [userId]
+    );
+    const payment = payResult.rows.length > 0 ? payResult.rows[0] : null;
+
+    if (type === 'sms') {
+      const msg = user.name + '님,\n[데일리 요가 클래스] 안내\n\n▶ 로그인: https://junseonghwang.com/login\n▶ 수업 시간: 평일 오전 9:30 / 오후 6:30\n\n* Zoom: https://us06web.zoom.us/j/87426930070?pwd=FFf88PQ1ZeyP8MJ1gCMqW6oaB35qqZ.1\n* 암호: yoga';
+      const cleanPhone = user.phone.replace(/[-\s]/g, '');
+      const date = new Date().toISOString();
+      const salt = crypto.randomBytes(32).toString('hex');
+      const signature = crypto.createHmac('sha256', CONFIG.SOLAPI_API_SECRET).update(date + salt).digest('hex');
+      const authHeader = 'HMAC-SHA256 apiKey=' + CONFIG.SOLAPI_API_KEY + ', date=' + date + ', salt=' + salt + ', signature=' + signature;
+      const response = await fetch('https://api.solapi.com/messages/v4/send', {
+        method: 'POST',
+        headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: { to: cleanPhone, from: CONFIG.SOLAPI_SENDER, text: msg, type: 'LMS' } })
+      });
+      const result = await response.json();
+      const success = result.statusCode === '2000' || !!result.groupId;
+      await pool.query(
+        'INSERT INTO notification_log (user_id, payment_id, type, status, detail) VALUES ($1, $2, $3, $4, $5)',
+        [userId, payment?.id || null, 'sms', success ? 'success' : 'failed', JSON.stringify({ groupId: result.groupId, manual: true })]
+      );
+      return res.json({ success, message: success ? 'SMS 재발송 성공' : 'SMS 재발송 실패' });
+    }
+
+    if (type === 'email') {
+      const html = '<div style="font-family:sans-serif;max-width:600px;margin:0 auto;line-height:1.8"><p><strong>' + user.name + '</strong>님,<br>[데일리 요가 클래스] 안내</p><ul style="list-style:none;padding:0"><li>▶ 로그인: <a href="https://junseonghwang.com/login">https://junseonghwang.com/login</a></li><li>▶ 수업 시간: 평일 오전 9:30 / 오후 6:30</li></ul><hr><ul style="list-style:none;padding:0"><li>Zoom: <a href="https://us06web.zoom.us/j/87426930070?pwd=FFf88PQ1ZeyP8MJ1gCMqW6oaB35qqZ.1">참여하기</a></li><li>Zoom 암호: yoga</li></ul></div>';
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + CONFIG.RESEND_API_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: '황준성 <junseong@junseonghwang.com>', to: user.email, subject: '[데일리 요가 클래스] 수업 안내', html })
+      });
+      const result = await response.json();
+      const success = !!result.id;
+      await pool.query(
+        'INSERT INTO notification_log (user_id, payment_id, type, status, detail) VALUES ($1, $2, $3, $4, $5)',
+        [userId, payment?.id || null, 'email', success ? 'success' : 'failed', JSON.stringify({ email_id: result.id, manual: true })]
+      );
+      return res.json({ success, message: success ? '이메일 재발송 성공' : '이메일 재발송 실패' });
+    }
+
+    if (type === 'cashreceipt') {
+      if (!payment) return res.status(400).json({ error: '확인된 결제 내역이 없습니다' });
+
+      const LinkID = CONFIG.POPBILL_LINK_ID;
+      const SecretKey = CONFIG.POPBILL_SECRET_KEY;
+      const CorpNum = CONFIG.POPBILL_CORP_NUM;
+      const bodyObj = { access_id: CorpNum, scope: ['member', '140'] };
+      const bodyJson = JSON.stringify(bodyObj);
+      const timestamp = new Date().toISOString();
+      const bodyHash = crypto.createHash('sha256').update(bodyJson).digest('base64');
+      const uri = '/POPBILL/Token';
+      const digestTarget = 'POST\n' + bodyHash + '\n' + timestamp + '\n2.0\n' + uri;
+      const sig = crypto.createHmac('sha256', Buffer.from(SecretKey, 'base64')).update(digestTarget).digest('base64');
+      const tokenResp = await fetch('https://auth.linkhub.co.kr' + uri, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-lh-date': timestamp, 'x-lh-version': '2.0', 'Authorization': 'LINKHUB ' + LinkID + ' ' + sig },
+        body: bodyJson
+      });
+      const tokenData = await tokenResp.json();
+      if (!tokenData.session_token) return res.json({ success: false, error: 'Popbill 토큰 실패' });
+
+      const receiptAmount = Math.min(payment.amount, CONFIG.PASS_PRICE);
+      const tax = Math.round(receiptAmount / 11);
+      const supply = receiptAmount - tax;
+      const mgtKey = 'YOGA-' + Date.now();
+      const identityNum = user.phone.replace(/[^0-9]/g, '');
+      const custPhone = identityNum.startsWith('0') ? identityNum : '0' + identityNum;
+      const cashbill = {
+        mgtKey, tradeType: '승인거래', tradeUsage: '소득공제용', taxationType: '과세', tradeOpt: '일반',
+        identityNum: custPhone, franchiseCorpNum: CorpNum, franchiseCorpName: '에니어그램 클럽',
+        franchiseCEOName: '황준성', franchiseAddr: '제주도 서귀포시 서호중앙로55 유포리아 C동 319호',
+        franchiseTEL: CONFIG.SOLAPI_SENDER, customerName: user.name, itemName: '데일리 요가 클래스',
+        orderNumber: mgtKey, email: user.email || '', hp: custPhone,
+        supplyCost: String(supply), tax: String(tax), serviceFee: '0', totalAmount: String(receiptAmount),
+        smssendYN: false, memo: '관리자 수동 발행'
+      };
+      const issueResp = await fetch('https://popbill.linkhub.co.kr/Cashbill', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json;charset=utf-8', 'Authorization': 'Bearer ' + tokenData.session_token, 'X-HTTP-Method-Override': 'ISSUE', 'User-Agent': 'NODEJS POPBILL SDK' },
+        body: JSON.stringify(cashbill)
+      });
+      const issueResult = await issueResp.json();
+      const success = issueResp.ok && (issueResult.code === 1 || issueResult.code === undefined);
+      await pool.query(
+        'INSERT INTO notification_log (user_id, payment_id, type, status, detail) VALUES ($1, $2, $3, $4, $5)',
+        [userId, payment.id, 'cashreceipt', success ? 'success' : 'failed', JSON.stringify({ mgtKey, manual: true, receipt_amount: receiptAmount })]
+      );
+      return res.json({ success, message: success ? '현금영수증 재발행 성공' : '현금영수증 재발행 실패' });
+    }
+
+    res.status(400).json({ error: 'type은 sms, email, cashreceipt 중 하나여야 합니다' });
+  } catch (err) {
+    console.error('Admin resend error:', err);
+    res.status(500).json({ error: '서버 오류' });
+  }
+});
+
 // ===================== API: 잔여횟수 있는 회원 조회 (n8n용) =====================
 
 app.get('/api/webhook/active-members', requireDB, requireApiKey, async (req, res) => {
@@ -1425,6 +1579,17 @@ app.post('/api/webhook/issue-cashreceipt', requireDB, requireApiKey, async (req,
     });
     const issueResult = await issueResp.json();
     const success = issueResp.ok && (issueResult.code === 1 || issueResult.code === undefined);
+
+    // Log to notification_log
+    if (req.body.user_id || req.body.payment_id) {
+      try {
+        const pool = getPool();
+        await pool.query(
+          'INSERT INTO notification_log (user_id, payment_id, type, status, detail) VALUES ($1, $2, $3, $4, $5)',
+          [req.body.user_id || null, req.body.payment_id || null, 'cashreceipt', success ? 'success' : 'failed', JSON.stringify({ mgtKey, receipt_amount: receiptAmount, phone })]
+        );
+      } catch (logErr) { console.error('notification_log insert error:', logErr); }
+    }
 
     res.json({
       success,
