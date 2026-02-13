@@ -69,30 +69,37 @@
     },
     {
       "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst apiKey = 'NCSXADOHZXIOWSXG';\nconst apiSecret = 'E6SA8I6NCT04MKTQN8TX0Y4SSGHEJMGR';\n\nconst date = new Date().toISOString();\nconst salt = crypto.randomBytes(32).toString('hex');\nconst hmac = crypto.createHmac('sha256', apiSecret);\nhmac.update(date + salt);\nconst signature = hmac.digest('hex');\nconst authHeader = 'HMAC-SHA256 apiKey=' + apiKey + ', date=' + date + ', salt=' + salt + ', signature=' + signature;\n\nreturn [{\n  json: {\n    ...$json,\n    auth_header: authHeader\n  }\n}];"
+      },
+      "id": "hmac-auth-payment",
+      "name": "HMAC Auth",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 200]
+    },
+    {
+      "parameters": {
         "method": "POST",
         "url": "https://api.solapi.com/messages/v4/send",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
-              "name": "Content-Type",
-              "value": "application/json"
+              "name": "Authorization",
+              "value": "={{ $json.auth_header }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ message: { to: $json.user_phone.replace(/[-\\s]/g, ''), from: '발신번호입력', text: '[에니어그램 요가] ' + $json.user_name + '님, 회원가입이 완료되었습니다.\\n\\n로그인: https://junseonghwang.com/login\\n임시비밀번호: ' + $json.temp_password + '\\n\\n마이페이지에서 비밀번호를 변경해주세요.' } }) }}",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
+        "jsonBody": "={\n  \"message\": {\n    \"to\": \"{{ $json.user_phone.replace(/[-\\\\s]/g, '') }}\",\n    \"from\": \"07079548182\",\n    \"text\": \"[에니어그램 요가] {{ $json.user_name }}님, 회원가입이 완료되었습니다.\\\\n\\\\n로그인: https://junseonghwang.com/login\\\\n임시비밀번호: {{ $json.temp_password }}\\\\n\\\\n마이페이지에서 비밀번호를 변경해주세요.\",\n    \"type\": \"LMS\"\n  }\n}",
         "options": {}
       },
       "id": "solapi-sms",
       "name": "Solapi SMS 발송",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1000, 200],
-      "notes": "⚠️ 설정 필요:\n1. 'from' 값을 실제 발신번호로 변경\n2. Solapi 인증 헤더를 Credentials에서 설정"
+      "position": [1220, 200]
     },
     {
       "parameters": {},
@@ -100,7 +107,7 @@
       "name": "기존 회원 (SMS 불필요)",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
-      "position": [1000, 400]
+      "position": [1220, 400]
     }
   ],
   "connections": {
@@ -130,7 +137,7 @@
       "main": [
         [
           {
-            "node": "Solapi SMS 발송",
+            "node": "HMAC Auth",
             "type": "main",
             "index": 0
           }
@@ -138,6 +145,17 @@
         [
           {
             "node": "기존 회원 (SMS 불필요)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HMAC Auth": {
+      "main": [
+        [
+          {
+            "node": "Solapi SMS 발송",
             "type": "main",
             "index": 0
           }
