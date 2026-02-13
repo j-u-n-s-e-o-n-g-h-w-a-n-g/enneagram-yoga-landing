@@ -1059,6 +1059,20 @@ app.post('/api/admin/payments/:id/confirm', requireDB, requireAdmin, async (req,
   }
 });
 
+app.delete('/api/admin/payments/:id', requireDB, requireAdmin, async (req, res) => {
+  const pool = getPool();
+  try {
+    const paymentId = req.params.id;
+    const payment = await pool.query('SELECT * FROM payments WHERE id = $1', [paymentId]);
+    if (payment.rows.length === 0) { return res.status(404).json({ error: '결제를 찾을 수 없습니다' }); }
+    await pool.query('DELETE FROM payments WHERE id = $1', [paymentId]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Delete payment error:', err);
+    res.status(500).json({ error: '서버 오류' });
+  }
+});
+
 app.post('/api/admin/members/:id/attend', requireDB, requireAdmin, async (req, res) => {
   const pool = getPool();
   const client = await pool.connect();
