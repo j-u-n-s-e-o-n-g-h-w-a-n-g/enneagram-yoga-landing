@@ -178,7 +178,7 @@ app.post('/api/webhook/payment-confirm', requireDB, requireApiKey, async (req, r
     }
     if (!appResult || appResult.rows.length === 0) {
       await client.query('ROLLBACK');
-      return res.status(404).json({ error: '매칭되는 신청 내역을 찾을 수 없습니다', depositor_name, phone, email });
+      return res.status(404).json({ success: false, status: 'not_found', error: '매칭되는 신청 내역을 찾을 수 없습니다', depositor_name, phone, email });
     }
 
     const application = appResult.rows[0];
@@ -305,6 +305,8 @@ app.post('/api/webhook/payment-confirm', requireDB, requireApiKey, async (req, r
 
     res.json({
       success: true,
+      status: overpaidInfo ? 'overpaid' : 'confirmed',
+      application_created_at: application.created_at,
       user_id: userId,
       temp_password: tempPassword,
       user_name: application.name,
