@@ -23,6 +23,10 @@ const CONFIG = {
   SOLAPI_API_SECRET: process.env.SOLAPI_API_SECRET || 'E6SA8I6NCT04MKTQN8TX0Y4SSGHEJMGR',
   SOLAPI_SENDER: process.env.SOLAPI_SENDER || '07079548182',
   RESEND_API_KEY: process.env.RESEND_API_KEY || 're_RfLPds6p_GxskQTJaTUCpn4HHengcj64y',
+  POPBILL_LINK_ID: process.env.POPBILL_LINK_ID || 'ENNEAGRAM',
+  POPBILL_SECRET_KEY: process.env.POPBILL_SECRET_KEY || 'q52EkWadYGB1H6FghRyzWxW7u1jbNwHk74+k48vprag=',
+  POPBILL_CORP_NUM: process.env.POPBILL_CORP_NUM || '6660203422',
+  DISCORD_WEBHOOK_URL: process.env.DISCORD_WEBHOOK_URL || 'https://discord.com/api/webhooks/1470651597640962138/dFDBwRlV7FfFBO0x-VJB2Vk_kJPAjy2QCGVd3msIcrwXd_X3WEKyZPvHCF1ij1TisFv9',
 };
 
 // Trust proxy (Railway, Heroku 등 리버스 프록시 환경에서 필요)
@@ -492,25 +496,6 @@ app.get('/api/webhook/journaling-targets', requireDB, requireApiKey, async (req,
   }
 });
 
-// ===================== JOURNALING SMS LOG (n8n 전용) =====================
-
-app.post('/api/webhook/journaling-sms-log', requireDB, requireApiKey, async (req, res) => {
-  const pool = getPool();
-  try {
-    const { user_id, class_pass_id, send_type, send_day_of_week } = req.body;
-    if (!user_id || !class_pass_id || !send_type || send_day_of_week === undefined) {
-      return res.status(400).json({ error: 'user_id, class_pass_id, send_type, send_day_of_week 필수' });
-    }
-    const result = await pool.query(
-      'INSERT INTO journaling_sms_log (user_id, class_pass_id, send_type, send_day_of_week) VALUES ($1, $2, $3, $4) RETURNING *',
-      [user_id, class_pass_id, send_type, send_day_of_week]
-    );
-    res.json({ success: true, log: result.rows[0] });
-  } catch (err) {
-    console.error('Journaling SMS log error:', err);
-    res.status(500).json({ error: '서버 오류' });
-  }
-});
 
 // ===================== CARE SMS TARGETS (n8n 전용) =====================
 
@@ -571,26 +556,6 @@ app.get('/api/webhook/care-sms-targets', requireDB, requireApiKey, async (req, r
     res.json({ success: true, targets: result.rows });
   } catch (err) {
     console.error('Care SMS targets API error:', err);
-    res.status(500).json({ error: '서버 오류' });
-  }
-});
-
-// ===================== CARE SMS LOG (n8n 전용) =====================
-
-app.post('/api/webhook/care-sms-log', requireDB, requireApiKey, async (req, res) => {
-  const pool = getPool();
-  try {
-    const { user_id, class_pass_id, sms_type } = req.body;
-    if (!user_id || !class_pass_id || !sms_type) {
-      return res.status(400).json({ error: 'user_id, class_pass_id, sms_type 필수' });
-    }
-    const result = await pool.query(
-      'INSERT INTO care_sms_log (user_id, class_pass_id, sms_type) VALUES ($1, $2, $3) RETURNING *',
-      [user_id, class_pass_id, sms_type]
-    );
-    res.json({ success: true, log: result.rows[0] });
-  } catch (err) {
-    console.error('Care SMS log error:', err);
     res.status(500).json({ error: '서버 오류' });
   }
 });
@@ -678,18 +643,19 @@ app.post('/api/webhook/send-sms', requireDB, requireApiKey, async (req, res) => 
 
 app.post('/api/webhook/send-email', requireDB, requireApiKey, async (req, res) => {
   try {
-    const { to, subject, html, text } = req.body;
+    const { to, from: fromAddr, subject, html, text, attachments } = req.body;
     if (!to || !subject || (!html && !text)) {
       return res.status(400).json({ error: 'to, subject, html/text 필수' });
     }
 
     const emailPayload = {
-      from: '황준성 <junseong@junseonghwang.com>',
+      from: fromAddr || '황준성 <junseong@junseonghwang.com>',
       to,
       subject,
     };
     if (html) emailPayload.html = html;
     if (text) emailPayload.text = text;
+    if (attachments && Array.isArray(attachments)) emailPayload.attachments = attachments;
 
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -1374,27 +1340,124 @@ app.get('/api/webhook/active-members', requireDB, requireApiKey, async (req, res
   }
 });
 
-// ===================== API: 첫 출석 회원 조회 (n8n 저널링 안내용 - 하위 호환) =====================
 
-app.get('/api/webhook/first-attendance-yesterday', requireDB, requireApiKey, async (req, res) => {
-  const pool = getPool();
+// ===================== POPBILL 현금영수증 발행 API (n8n 통합용) =====================
+
+app.post('/api/webhook/issue-cashreceipt', requireDB, requireApiKey, async (req, res) => {
   try {
-    const result = await pool.query(`
-      SELECT u.id, u.name, u.phone, u.email
-      FROM users u
-      JOIN attendance a ON a.user_id = u.id
-      WHERE u.role = 'member'
-      GROUP BY u.id, u.name, u.phone, u.email
-      HAVING COUNT(a.id) = 1
-        AND MIN(a.attended_at)::date = (CURRENT_DATE - INTERVAL '1 day')::date
-    `);
-    res.json({ success: true, members: result.rows });
+    const { phone, name, email, amount } = req.body;
+    if (!phone || !name || !amount) {
+      return res.status(400).json({ error: 'phone, name, amount 필수' });
+    }
+
+    const LinkID = CONFIG.POPBILL_LINK_ID;
+    const SecretKey = CONFIG.POPBILL_SECRET_KEY;
+    const CorpNum = CONFIG.POPBILL_CORP_NUM;
+    const ServiceID = 'POPBILL';
+    const AuthURL = 'https://auth.linkhub.co.kr';
+    const ApiBase = 'https://popbill.linkhub.co.kr';
+
+    // 1. Get Popbill Token
+    const bodyObj = { access_id: CorpNum, scope: ['member', '140'] };
+    const bodyJson = JSON.stringify(bodyObj);
+    const timestamp = new Date().toISOString();
+    const bodyHash = crypto.createHash('sha256').update(bodyJson).digest('base64');
+    const uri = '/' + ServiceID + '/Token';
+    const digestTarget = 'POST\n' + bodyHash + '\n' + timestamp + '\n2.0\n' + uri;
+    const signature = crypto.createHmac('sha256', Buffer.from(SecretKey, 'base64')).update(digestTarget).digest('base64');
+
+    const tokenResp = await fetch(AuthURL + uri, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-lh-date': timestamp,
+        'x-lh-version': '2.0',
+        'Authorization': 'LINKHUB ' + LinkID + ' ' + signature
+      },
+      body: bodyJson
+    });
+    const tokenData = await tokenResp.json();
+    if (!tokenData.session_token) {
+      return res.json({ success: false, error: 'Popbill 토큰 발급 실패', detail: tokenData });
+    }
+
+    // 2. Build & Issue Cash Receipt
+    const CLASS_PRICE = CONFIG.PASS_PRICE;
+    const rawAmount = Number(amount);
+    const receiptAmount = Math.min(rawAmount, CLASS_PRICE);
+    const tax = Math.round(receiptAmount / 11);
+    const supply = receiptAmount - tax;
+    const mgtKey = 'YOGA-' + Date.now();
+    const identityNum = String(phone).replace(/[^0-9]/g, '');
+    const custPhone = identityNum.startsWith('0') ? identityNum : '0' + identityNum;
+
+    const cashbill = {
+      mgtKey, tradeType: '승인거래', tradeUsage: '소득공제용',
+      taxationType: '과세', tradeOpt: '일반',
+      identityNum: custPhone,
+      franchiseCorpNum: CorpNum,
+      franchiseCorpName: '에니어그램 클럽',
+      franchiseCEOName: '황준성',
+      franchiseAddr: '제주도 서귀포시 서호중앙로55 유포리아 C동 319호',
+      franchiseTEL: CONFIG.SOLAPI_SENDER,
+      customerName: name,
+      itemName: '데일리 요가 클래스',
+      orderNumber: mgtKey,
+      email: email || '',
+      hp: custPhone,
+      supplyCost: String(supply),
+      tax: String(tax),
+      serviceFee: '0',
+      totalAmount: String(receiptAmount),
+      smssendYN: false,
+      memo: rawAmount < CLASS_PRICE ? '자동발행 (부족입금 ' + rawAmount.toLocaleString() + '원)' : rawAmount > CLASS_PRICE ? '자동발행 (초과입금, ' + CLASS_PRICE.toLocaleString() + '원 발행)' : '자동발행'
+    };
+
+    const issueResp = await fetch(ApiBase + '/Cashbill', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + tokenData.session_token,
+        'x-pb-userid': 'ADMIN'
+      },
+      body: JSON.stringify(cashbill)
+    });
+    const issueResult = await issueResp.json();
+    const success = issueResp.ok && (issueResult.code === 1 || issueResult.code === undefined);
+
+    res.json({
+      success,
+      mgtKey,
+      receipt_amount: receiptAmount,
+      detail: success ? null : issueResult
+    });
   } catch (err) {
-    console.error('First attendance API error:', err);
-    res.status(500).json({ error: '서버 오류' });
+    console.error('Popbill cashreceipt error:', err);
+    res.status(500).json({ error: '현금영수증 발행 중 오류' });
   }
 });
 
+// ===================== DISCORD 알림 API (n8n 통합용) =====================
+
+app.post('/api/webhook/notify-discord', requireDB, requireApiKey, async (req, res) => {
+  try {
+    const { message } = req.body;
+    if (!message) {
+      return res.status(400).json({ error: 'message 필수' });
+    }
+
+    const response = await fetch(CONFIG.DISCORD_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: message })
+    });
+
+    res.json({ success: response.ok });
+  } catch (err) {
+    console.error('Discord notify error:', err);
+    res.status(500).json({ error: 'Discord 알림 중 오류' });
+  }
+});
 
 // ===================== GITHUB BACKUP API (n8n 전용) =====================
 
