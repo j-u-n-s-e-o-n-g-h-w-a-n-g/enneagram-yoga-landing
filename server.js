@@ -20,6 +20,9 @@ const CONFIG = {
   HOST_EMAIL: process.env.HOST_EMAIL || 'junseong@junseonghwang.com',
 };
 
+// Trust proxy (Railway, Heroku 등 리버스 프록시 환경에서 필요)
+app.set('trust proxy', 1);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -31,7 +34,9 @@ const sessionConfig = {
   saveUninitialized: false,
   cookie: {
     maxAge: 30 * 24 * 60 * 60 * 1000,
-    secure: process.env.NODE_ENV === 'production'
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true, // XSS 공격 방지
+    sameSite: 'lax' // CSRF 공격 방지
   }
 };
 
