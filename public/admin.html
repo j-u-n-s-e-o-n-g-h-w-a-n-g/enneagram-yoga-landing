@@ -191,6 +191,10 @@ footer p{font-size:0.7rem;color:#999;font-weight:300}
 <button class="action-btn" onclick="addCredits()">추가</button>
 </div>
 <div class="section-box"><div id="detailPasses"><div class="empty-state">이용권이 없습니다</div></div></div>
+<div style="margin-top:20px">
+<div style="font-size:0.82rem;font-weight:500;margin-bottom:8px;color:var(--text)">횟수 추가 이력</div>
+<div class="section-box"><div id="detailCreditLogs"><div class="empty-state">추가 이력이 없습니다</div></div></div>
+</div>
 </div>
 <div class="detail-tab-content" id="dtab-payments-detail">
 <div class="section-box"><div id="detailPayments"><div class="empty-state">결제 내역이 없습니다</div></div></div>
@@ -365,6 +369,9 @@ async function openMemberDetail(userId) {
     // Passes
     renderPasses(data.passes);
 
+    // Credit Logs
+    renderCreditLogs(data.credit_logs);
+
     // Payments
     renderPaymentsDetail(data.payments);
 
@@ -412,6 +419,22 @@ function renderPasses(passes) {
   });
   html += '</tbody></table>';
   document.getElementById('detailPasses').innerHTML = html;
+}
+
+function renderCreditLogs(logs) {
+  if (!logs || logs.length === 0) {
+    document.getElementById('detailCreditLogs').innerHTML = '<div class="empty-state">추가 이력이 없습니다</div>';
+    return;
+  }
+  let html = '<table><thead><tr><th>날짜</th><th>추가 횟수</th><th>이용권 ID</th><th>메모</th></tr></thead><tbody>';
+  logs.forEach(l => {
+    const dt = new Date(l.created_at);
+    const date = dt.toLocaleDateString('ko-KR');
+    const time = dt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+    html += '<tr><td>' + date + ' ' + time + '</td><td><strong>+' + l.credits + '회</strong></td><td>' + (l.class_pass_id || '-') + '</td><td style="font-size:0.76rem;color:#888">' + (l.note || '-') + '</td></tr>';
+  });
+  html += '</tbody></table>';
+  document.getElementById('detailCreditLogs').innerHTML = html;
 }
 
 function renderPaymentsDetail(payments) {
