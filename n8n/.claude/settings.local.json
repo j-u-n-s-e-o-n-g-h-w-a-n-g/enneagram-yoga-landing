@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__1b7fd68c-7211-4c03-afad-4f53d924f044__search_workflows",
+      "mcp__1b7fd68c-7211-4c03-afad-4f53d924f044__get_workflow_details",
+      "mcp__1b7fd68c-7211-4c03-afad-4f53d924f044__execute_workflow",
+      "Bash(curl:*)",
+      "Bash(python3:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:community.n8n.io)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:fossies.org)",
+      "WebFetch(domain:n8n.io)",
+      "WebFetch(domain:docs.solapi.com)",
+      "WebFetch(domain:resend.com)",
+      "WebFetch(domain:developers.solapi.dev)",
+      "WebFetch(domain:solapi.github.io)",
+      "WebFetch(domain:docs.n8n.io)",
+      "WebFetch(domain:gist.github.com)",
+      "WebFetch(domain:www.npmjs.com)",
+      "WebFetch(domain:docs.railway.com)",
+      "Bash(# Find claude CLI path which claude || find /usr/local /opt /Users/js -name \"\"claude\"\" -type f)",
+      "Bash(CLAUDE_CLI=\"/Users/js/Library/Application Support/Claude/claude-code/2.1.34/claude\")",
+      "Bash(__NEW_LINE_c30e563056e3132e__ \"$CLAUDE_CLI\" mcp add railway -s user -e RAILWAY_API_TOKEN=50789c4f-7ed3-409e-900a-b088d90dd19a -- npx -y @railway/mcp-server)",
+      "WebFetch(domain:developers.popbill.com)",
+      "WebFetch(domain:jar-download.com)",
+      "WebFetch(domain:www.rubydoc.info)",
+      "WebFetch(domain:docs.popbill.com)",
+      "mcp__github__get_file_contents",
+      "mcp__github__search_repositories",
+      "mcp__github__search_code",
+      "WebFetch(domain:unpkg.com)",
+      "WebFetch(domain:pypi.org)",
+      "WebFetch(domain:registry.npmjs.org)",
+      "Bash(cat:*)"
+    ]
+  }
+}

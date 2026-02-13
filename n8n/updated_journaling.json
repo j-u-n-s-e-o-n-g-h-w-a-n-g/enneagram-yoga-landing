@@ -1,0 +1,271 @@
+{
+  "name": "Journaling Guide SMS",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 11 * * *"
+            }
+          ]
+        }
+      },
+      "id": "journal-trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://junseonghwang.com/api/webhook/journaling-targets",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "5f5366838ff98aa9a1946dfafb66915d49eda9670a3ad8d8c94d4d24f472dbc3"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-targets",
+      "name": "Fetch Journaling Targets",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst items = $input.all();\nconst members = items[0].json.members || [];\n\nconst kakaoLink = 'https://pf.kakao.com/_xnxdXSn/chat';\n\nconst results = [];\nfor (const member of members) {\n  if (!member.phone) continue;\n  const phone = member.phone.replace(/[-\\s]/g, '');\n  if (phone.length < 10) continue;\n\n  // expires_at 포맷팅\n  let expiresStr = '';\n  if (member.expires_at) {\n    const d = new Date(member.expires_at);\n    expiresStr = d.getFullYear() + '년 ' + (d.getMonth() + 1) + '월 ' + d.getDate() + '일';\n  }\n\n  let msg = '';\n  if (member.sms_type === 'first') {\n    msg = member.name + '님, 어제 첫 데일리 요가 클래스는 어떠셨나요?\\n\\n수업 후 자신의 몸에서 느꼈던 감각이나 변화를 기억해보세요. 호흡이 깊어진 느낌, 어깨가 내려간 느낌, 혹은 마음이 고요해진 순간 등 아주 작은 것이라도 괜찮습니다.\\n\\n이런 감각을 자신이 이용하는 SNS에 저널링으로 남겨주시면, 9회 추가 이용권을 드립니다. 써야 해서 쓰는 후기가 아니라, 자신의 몸에 대한 감각을 깨우는 저널링의 일환으로 생각해주시면 기록에 더 의미가 생길 거예요.\\n\\n저널링 인증샷을 아래 카카오톡 채널로 보내주세요.\\n' + kakaoLink + '\\n\\n* 추가 이용권 유효기간: 결제일로부터 3개월 (' + expiresStr + ')\\n* 저널링 내용은 요가코치 황준성의 SNS에 공유될 수 있습니다.';\n  } else {\n    // A/B 로테이션: first_attended_at 기준 주차 계산\n    let weekNum = 0;\n    if (member.first_attended_at) {\n      const firstDate = new Date(member.first_attended_at);\n      const now = new Date();\n      const diffDays = Math.floor((now - firstDate) / (1000 * 60 * 60 * 24));\n      weekNum = Math.floor(diffDays / 7);\n    }\n    const isEvenWeek = (weekNum % 2 === 0);\n\n    if (isEvenWeek) {\n      msg = member.name + '님, 이번 주 수업에서 가장 인상 깊었던 순간은 언제인가요?\\n\\n특정 동작에서 느꼈던 감각, 호흡이 깊어진 순간, 혹은 수업이 끝난 뒤 몸이 달라진 느낌까지 — 아주 작은 것이라도 좋습니다.\\n\\n이용권 기간 내 저널링을 한 번이라도 작성해주시면 9회 추가 이용권을 드립니다.\\n\\n저널링 인증샷을 아래 카카오톡 채널로 보내주세요.\\n' + kakaoLink + '\\n\\n* 추가 이용권 유효기간: 결제일로부터 3개월 (' + expiresStr + ')\\n* 저널링 내용은 요가코치 황준성의 SNS에 공유될 수 있습니다.';\n    } else {\n      msg = member.name + '님, 요가를 시작하기 전과 지금, 달라진 점이 있나요?\\n\\n몸의 유연성뿐 아니라 마음의 변화, 일상에서의 작은 차이까지 — 스스로 느낀 변화를 기록해보세요.\\n\\n이용권 기간 내 저널링을 한 번이라도 작성해주시면 9회 추가 이용권을 드립니다.\\n\\n저널링 인증샷을 아래 카카오톡 채널로 보내주세요.\\n' + kakaoLink + '\\n\\n* 추가 이용권 유효기간: 결제일로부터 3개월 (' + expiresStr + ')\\n* 저널링 내용은 요가코치 황준성의 SNS에 공유될 수 있습니다.';\n    }\n  }\n\n  results.push({\n    json: {\n      phone: phone,\n      name: member.name,\n      message: msg,\n      user_id: member.user_id,\n      class_pass_id: member.class_pass_id,\n      sms_type: member.sms_type,\n      first_class_dow: member.first_class_dow\n    }\n  });\n}\n\nreturn results.length > 0 ? results : [{ json: { skip: true } }];\n"
+      },
+      "id": "prepare-journal-sms",
+      "name": "Prepare Journaling SMS",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "skip-check",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notTrue"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "filter-skip-j",
+      "name": "Has Members?",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst items = $input.all();\nconst results = [];\n\nconst apiKey = 'NCS4FNOFBWYK96ZI';\nconst apiSecret = 'E6SA8I6NCT04MKTQN8TX0Y4SSGHEJMGR';\n\nfor (const item of items) {\n  const date = new Date().toISOString();\n  const salt = crypto.randomBytes(32).toString('hex');\n  const hmac = crypto.createHmac('sha256', apiSecret);\n  hmac.update(date + salt);\n  const signature = hmac.digest('hex');\n  const authHeader = 'HMAC-SHA256 apiKey=' + apiKey + ', date=' + date + ', salt=' + salt + ', signature=' + signature;\n\n  results.push({\n    json: {\n      ...item.json,\n      auth_header: authHeader\n    }\n  });\n}\n\nreturn results;\n"
+      },
+      "id": "hmac-auth-j",
+      "name": "HMAC Auth",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.solapi.com/messages/v4/send",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $json.auth_header }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"message\": {\n    \"to\": \"{{ $json.phone }}\",\n    \"from\": \"07079548182\",\n    \"text\": {{ JSON.stringify($json.message) }},\n    \"type\": \"LMS\"\n  }\n}",
+        "options": {}
+      },
+      "id": "send-journal-sms",
+      "name": "Send SMS via Solapi",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "sms-success-check",
+              "leftValue": "={{ $json.statusCode }}",
+              "rightValue": "2000",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "check-sms-result",
+      "name": "SMS Success?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1320, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://junseonghwang.com/api/webhook/journaling-sms-log",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "5f5366838ff98aa9a1946dfafb66915d49eda9670a3ad8d8c94d4d24f472dbc3"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"user_id\": {{ $('Prepare Journaling SMS').item.json.user_id }},\n  \"class_pass_id\": {{ $('Prepare Journaling SMS').item.json.class_pass_id }},\n  \"send_type\": \"{{ $('Prepare Journaling SMS').item.json.sms_type }}\",\n  \"send_day_of_week\": {{ $('Prepare Journaling SMS').item.json.first_class_dow }}\n}",
+        "options": {}
+      },
+      "id": "log-sms-send",
+      "name": "Log SMS Send",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, -100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://discord.com/api/webhooks/1470651597640962138/dFDBwRlV7FfFBO0x-VJB2Vk_kJPAjy2QCGVd3msIcrwXd_X3WEKyZPvHCF1ij1TisFv9",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": \"⚠️ 저널링 SMS 발송 실패\\n회원: {{ $('Prepare Journaling SMS').item.json.name }}\\n전화: {{ $('Prepare Journaling SMS').item.json.phone }}\\n유형: {{ $('Prepare Journaling SMS').item.json.sms_type }}\\n응답: {{ JSON.stringify($json).substring(0, 300) }}\"\n}",
+        "options": {}
+      },
+      "id": "discord-fail-j",
+      "name": "Discord SMS Fail",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 100]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Journaling Targets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Journaling Targets": {
+      "main": [
+        [
+          {
+            "node": "Prepare Journaling SMS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Journaling SMS": {
+      "main": [
+        [
+          {
+            "node": "Has Members?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Members?": {
+      "main": [
+        [
+          {
+            "node": "HMAC Auth",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HMAC Auth": {
+      "main": [
+        [
+          {
+            "node": "Send SMS via Solapi",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send SMS via Solapi": {
+      "main": [
+        [
+          {
+            "node": "SMS Success?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SMS Success?": {
+      "main": [
+        [
+          {
+            "node": "Log SMS Send",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Discord SMS Fail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

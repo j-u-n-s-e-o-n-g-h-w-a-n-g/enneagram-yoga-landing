@@ -1,0 +1,251 @@
+{
+  "name": "Class Reminder SMS",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9,18 * * 1-5"
+            }
+          ]
+        }
+      },
+      "id": "reminder-trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://junseonghwang.com/api/webhook/active-members",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "5f5366838ff98aa9a1946dfafb66915d49eda9670a3ad8d8c94d4d24f472dbc3"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-members",
+      "name": "Fetch Active Members",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst items = $input.all();\nconst members = items[0].json.members || [];\nconst now = new Date();\nconst hour = now.toLocaleString('en-US', { timeZone: 'Asia/Seoul', hour: 'numeric', hour12: false });\nconst hourNum = parseInt(hour);\n\nlet sessionTime = '';\nif (hourNum < 12) {\n  sessionTime = '오전 9시 30분';\n} else {\n  sessionTime = '오후 6시 30분';\n}\n\nconst zoomLink = 'https://us06web.zoom.us/j/87426930070?pwd=FFf88PQ1ZeyP8MJ1gCMqW6oaB35qqZ.1';\n\nconst results = [];\nfor (const member of members) {\n  if (!member.phone) continue;\n  const phone = member.phone.replace(/[-\\s]/g, '');\n  if (phone.length < 10) continue;\n  \n  const msg = member.name + '님, 30분 뒤(' + sessionTime + ') 데일리 요가 클래스가 시작됩니다.\\n\\n잠시 하던 일을 내려놓고, 편안한 옷으로 갈아입으며\\n오늘의 나에게 집중할 준비를 해보세요.\\n\\nZoom 입장: ' + zoomLink + '\\n* Zoom 암호: yoga';\n  \n  results.push({\n    json: {\n      phone: phone,\n      name: member.name,\n      message: msg\n    }\n  });\n}\n\nreturn results.length > 0 ? results : [{ json: { skip: true } }];\n"
+      },
+      "id": "prepare-sms",
+      "name": "Prepare SMS Messages",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": ""
+          },
+          "conditions": [
+            {
+              "id": "condition-skip",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notTrue"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filter-skip",
+      "name": "Has Members?",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst apiKey = 'NCS4FNOFBWYK96ZI';\nconst apiSecret = 'E6SA8I6NCT04MKTQN8TX0Y4SSGHEJMGR';\n\nconst date = new Date().toISOString();\nconst salt = crypto.randomBytes(32).toString('hex');\nconst signature = crypto.createHmac('sha256', apiSecret).update(date + salt).digest('hex');\n\nreturn [{\n  json: {\n    ...$json,\n    auth: `HMAC-SHA256 apiKey=${apiKey}, date=${date}, salt=${salt}, signature=${signature}`\n  }\n}];\n"
+      },
+      "id": "hmac-auth-reminder",
+      "name": "HMAC Auth",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.solapi.com/messages/v4/send",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $json.auth }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"message\": {\n    \"to\": \"{{ $json.phone }}\",\n    \"from\": \"07079548182\",\n    \"text\": {{ JSON.stringify($json.message) }},\n    \"type\": \"LMS\"\n  }\n}",
+        "options": {}
+      },
+      "id": "send-sms",
+      "name": "Send SMS via Solapi",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 0],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": ""
+          },
+          "conditions": [
+            {
+              "id": "condition-sms-success",
+              "leftValue": "={{ $json.groupId }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-sms-success-reminder",
+      "name": "SMS 결과 확인",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1320, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://discord.com/api/webhooks/1470651597640962138/dFDBwRlV7FfFBO0x-VJB2Vk_kJPAjy2QCGVd3msIcrwXd_X3WEKyZPvHCF1ij1TisFv9",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": \"❌ **리마인더 SMS 발송 실패**\\n- 이름: {{ $('Prepare SMS Messages').item.json.name }}\\n- 전화번호: {{ $('Prepare SMS Messages').item.json.phone }}\\n- 에러: {{ JSON.stringify($json).substring(0, 200) }}\"\n}",
+        "options": {}
+      },
+      "id": "discord-sms-fail-reminder",
+      "name": "Discord SMS Fail",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 150]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Active Members",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Active Members": {
+      "main": [
+        [
+          {
+            "node": "Prepare SMS Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare SMS Messages": {
+      "main": [
+        [
+          {
+            "node": "Has Members?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Members?": {
+      "main": [
+        [
+          {
+            "node": "HMAC Auth",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HMAC Auth": {
+      "main": [
+        [
+          {
+            "node": "Send SMS via Solapi",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send SMS via Solapi": {
+      "main": [
+        [
+          {
+            "node": "SMS 결과 확인",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SMS 결과 확인": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Discord SMS Fail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

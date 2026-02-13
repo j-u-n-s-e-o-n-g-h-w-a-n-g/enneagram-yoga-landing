@@ -1,0 +1,234 @@
+{
+  "name": "Daily Backup",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0],
+      "id": "schedule-trigger",
+      "name": "Daily Backup Schedule"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://junseonghwang.com/api/webhook/backup",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "5f5366838ff98aa9a1946dfafb66915d49eda9670a3ad8d8c94d4d24f472dbc3"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [260, -80],
+      "id": "fetch-db",
+      "name": "Fetch DB Backup",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://n8n.junseonghwang.com/api/v1/workflows",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-N8N-API-KEY",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxM2YwZTcxNy0wNzE2LTQyMzctYjJmMS0wM2I2M2ExNjAzNTEiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwianRpIjoiOTE3Mjc5NmQtYzU2OC00MTE0LWJmYWItOGRiYjA1MzQ4MmRkIiwiaWF0IjoxNzcwNzAxMzAzLCJleHAiOjE3NzMyODgwMDB9.fwyrKaLFTD-awrWzIY86PoK0wq1CnRxM7OfbkLiNXf8"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [260, 80],
+      "id": "fetch-wf",
+      "name": "Fetch n8n Workflows",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "let dbData = {};\nlet workflowsData = {};\n\ntry { dbData = $(\"Fetch DB Backup\").first().json; } catch(e) {}\ntry { workflowsData = $(\"Fetch n8n Workflows\").first().json; } catch(e) {}\n\nconst now = new Date();\nconst kst = new Date(now.getTime() + 9*60*60*1000);\nconst dateStr = kst.toISOString().slice(0,10);\n\nconst counts = dbData.counts || {};\nconst wfCount = (workflowsData.data || []).length;\n\nconst dbBase64 = Buffer.from(JSON.stringify(dbData, null, 2)).toString(\"base64\");\nconst wfBase64 = Buffer.from(JSON.stringify(workflowsData, null, 2)).toString(\"base64\");\n\nconst htmlBody = '<div style=\"font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px\">' +\n  '<h2 style=\"color:#8a7968\">\ud83d\udce6 \uc77c\uac04 \ubc31\uc5c5 \ub9ac\ud3ec\ud2b8</h2>' +\n  '<p style=\"color:#666\">' + dateStr + '</p>' +\n  '<hr style=\"border:1px solid #d4cdc4\">' +\n  '<h3 style=\"color:#2c2c2c\">DB \ub370\uc774\ud130 \uc694\uc57d</h3>' +\n  '<ul>' +\n  '<li>\ud68c\uc6d0 \uc218: <strong>' + (counts.users||0) + '</strong>\uba85</li>' +\n  '<li>\uc2e0\uccad \ub0b4\uc5ed: <strong>' + (counts.applications||0) + '</strong>\uac74</li>' +\n  '<li>\uc774\uc6a9\uad8c: <strong>' + (counts.class_passes||0) + '</strong>\uac74</li>' +\n  '<li>\uacb0\uc81c \ub0b4\uc5ed: <strong>' + (counts.payments||0) + '</strong>\uac74</li>' +\n  '<li>\ucd9c\uc11d \uae30\ub85d: <strong>' + (counts.attendance||0) + '</strong>\uac74</li>' +\n  '</ul>' +\n  '<h3 style=\"color:#2c2c2c\">n8n \uc6cc\ud06c\ud50c\ub85c\uc6b0</h3>' +\n  '<ul><li>\ucd1d \uc6cc\ud06c\ud50c\ub85c\uc6b0: <strong>' + wfCount + '</strong>\uac1c</li></ul>' +\n  '<hr style=\"border:1px solid #d4cdc4\">' +\n  '<p style=\"color:#888;font-size:13px\">\ucca8\ubd80\ub41c JSON \ud30c\uc77c\uc5d0 \uc804\uccb4 \ubc31\uc5c5 \ub370\uc774\ud130\uac00 \ud3ec\ud568\ub418\uc5b4 \uc788\uc2b5\ub2c8\ub2e4.</p>' +\n  '</div>';\n\nconst emailPayload = {\n  from: \"\ud669\uc900\uc131 <junseong@junseonghwang.com>\",\n  to: \"thereadingmaker@gmail.com\",\n  subject: \"[\uc77c\uac04 \ubc31\uc5c5] junseonghwang.com (\" + dateStr + \")\",\n  html: htmlBody,\n  attachments: [\n    {\n      filename: dateStr + \"_db_backup.json\",\n      content: dbBase64\n    },\n    {\n      filename: dateStr + \"_n8n_workflows.json\",\n      content: wfBase64\n    }\n  ]\n};\n\nreturn [{ json: emailPayload }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [520, 0],
+      "id": "prepare-email",
+      "name": "Prepare Email"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.resend.com/emails",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer re_RfLPds6p_GxskQTJaTUCpn4HHengcj64y"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [780, 0],
+      "id": "send-email",
+      "name": "Send Backup Email",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": ""
+          },
+          "conditions": [
+            {
+              "id": "check-email-sent",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1040, 0],
+      "id": "if-backup-success",
+      "name": "\ubc31\uc5c5 \uacb0\uacfc \ud655\uc778"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://discord.com/api/webhooks/1470651597640962138/dFDBwRlV7FfFBO0x-VJB2Vk_kJPAjy2QCGVd3msIcrwXd_X3WEKyZPvHCF1ij1TisFv9",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"content\": \"\u274c **\ubc31\uc5c5 \uc774\uba54\uc77c \ubc1c\uc1a1 \uc2e4\ud328**\\n- \ub0a0\uc9dc: {{ $('Prepare Email').first().json.subject }}\\n- \uc5d0\ub7ec: {{ JSON.stringify($json).substring(0, 300) }}\"}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1300, 80],
+      "id": "discord-backup-fail",
+      "name": "Discord Backup Fail"
+    }
+  ],
+  "connections": {
+    "Daily Backup Schedule": {
+      "main": [
+        [
+          {
+            "node": "Fetch DB Backup",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch n8n Workflows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch DB Backup": {
+      "main": [
+        [
+          {
+            "node": "Prepare Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch n8n Workflows": {
+      "main": [
+        [
+          {
+            "node": "Prepare Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Email": {
+      "main": [
+        [
+          {
+            "node": "Send Backup Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Backup Email": {
+      "main": [
+        [
+          {
+            "node": "\ubc31\uc5c5 \uacb0\uacfc \ud655\uc778",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\ubc31\uc5c5 \uacb0\uacfc \ud655\uc778": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Discord Backup Fail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

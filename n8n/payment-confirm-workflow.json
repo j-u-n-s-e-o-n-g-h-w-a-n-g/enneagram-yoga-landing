@@ -1,0 +1,152 @@
+{
+  "name": "입금확인 → 자동회원가입 + SMS",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "nonghyup-deposit",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Nonghyup Deposit Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://junseonghwang.com/api/webhook/payment-confirm",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "5f5366838ff98aa9a1946dfafb66915d49eda9670a3ad8d8c94d4d24f472dbc3"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ phone: $json.phone || $json.sender_phone || '', depositor_name: $json.depositor_name || $json.sender_name || $json.name || '', amount: $json.amount || $json.deposit_amount || 0, email: $json.email || '' }) }}",
+        "options": {}
+      },
+      "id": "http-request",
+      "name": "홈페이지 자동가입 API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-new-user",
+              "leftValue": "={{ $json.is_new_user }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-new-user",
+      "name": "신규 회원?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [750, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.solapi.com/messages/v4/send",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ message: { to: $json.user_phone.replace(/[-\\s]/g, ''), from: '발신번호입력', text: '[에니어그램 요가] ' + $json.user_name + '님, 회원가입이 완료되었습니다.\\n\\n로그인: https://junseonghwang.com/login\\n임시비밀번호: ' + $json.temp_password + '\\n\\n마이페이지에서 비밀번호를 변경해주세요.' } }) }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "solapi-sms",
+      "name": "Solapi SMS 발송",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1000, 200],
+      "notes": "⚠️ 설정 필요:\n1. 'from' 값을 실제 발신번호로 변경\n2. Solapi 인증 헤더를 Credentials에서 설정"
+    },
+    {
+      "parameters": {},
+      "id": "no-op",
+      "name": "기존 회원 (SMS 불필요)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1000, 400]
+    }
+  ],
+  "connections": {
+    "Nonghyup Deposit Webhook": {
+      "main": [
+        [
+          {
+            "node": "홈페이지 자동가입 API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "홈페이지 자동가입 API": {
+      "main": [
+        [
+          {
+            "node": "신규 회원?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "신규 회원?": {
+      "main": [
+        [
+          {
+            "node": "Solapi SMS 발송",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "기존 회원 (SMS 불필요)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": []
+}

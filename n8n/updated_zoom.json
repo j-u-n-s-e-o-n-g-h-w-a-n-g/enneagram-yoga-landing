@@ -1,0 +1,407 @@
+{
+  "name": "Zoom \ucd9c\uc11d \uc790\ub3d9 \ucc28\uac10",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "40 10,19 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zoom.us/oauth/token?grant_type=account_credentials&account_id=HPuC4HdYQDOjT9KN4XXdiA",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {}
+      },
+      "id": "zoom-auth",
+      "name": "Zoom OAuth Token",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [260, 0],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "zoom-basic",
+          "name": "Zoom Basic Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.zoom.us/v2/past_meetings/87426930070/instances",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.access_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-instances",
+      "name": "Get Instances",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [520, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const meetings = $input.first().json.meetings || [];\n\nif (meetings.length === 0) {\n  return [{ json: { skip: true, reason: 'No past meeting instances found' } }];\n}\n\nconst latest = meetings[meetings.length - 1];\nconst uuid = latest.uuid;\n\nlet encodedUuid = uuid;\nif (uuid.startsWith('/') || uuid.includes('//')) {\n  encodedUuid = encodeURIComponent(encodeURIComponent(uuid));\n} else {\n  encodedUuid = encodeURIComponent(uuid);\n}\n\nreturn [{\n  json: {\n    skip: false,\n    uuid: uuid,\n    encodedUuid: encodedUuid,\n    start_time: latest.start_time,\n    topic: latest.topic || 'Daily Yoga Class'\n  }\n}];"
+      },
+      "id": "extract-uuid",
+      "name": "Extract UUID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [780, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": ""
+          },
+          "conditions": [
+            {
+              "id": "check-skip",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "false"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "if-has-meeting",
+      "name": "Has Meeting",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.1,
+      "position": [1040, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.zoom.us/v2/report/meetings/{{ $('Extract UUID').first().json.encodedUuid }}/participants?page_size=300",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Zoom OAuth Token').first().json.access_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-participants",
+      "name": "Get Participants",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1300, -100]
+    },
+    {
+      "parameters": {
+        "jsCode": "const inputData = $input.first().json;\nconst participants = inputData.participants || [];\nconst uuidData = $('Extract UUID').first().json;\n\nconst uniqueParticipants = [];\nconst seenEmails = new Set();\n\nfor (const p of participants) {\n  const email = (p.user_email || '').toLowerCase().trim();\n  if (email && !seenEmails.has(email)) {\n    seenEmails.add(email);\n    uniqueParticipants.push({\n      email: email,\n      name: p.name || '',\n      duration: p.duration || 0\n    });\n  }\n}\n\nreturn [{\n  json: {\n    meeting_uuid: uuidData.uuid,\n    meeting_topic: uuidData.topic,\n    participants: uniqueParticipants,\n    participant_count: uniqueParticipants.length\n  }\n}];"
+      },
+      "id": "prepare-data",
+      "name": "Prepare Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, -100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://junseonghwang.com/api/webhook/zoom-attendance",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-key",
+              "value": "5f5366838ff98aa9a1946dfafb66915d49eda9670a3ad8d8c94d4d24f472dbc3"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "send-attendance",
+      "name": "Send Attendance",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1820, -100],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": ""
+          },
+          "conditions": [
+            {
+              "id": "check-attendance",
+              "leftValue": "={{ JSON.stringify($json.summary || '') }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "if-attendance-success",
+      "name": "\ucd9c\uc11d \uacb0\uacfc \ud655\uc778",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.1,
+      "position": [2080, -100]
+    },
+    {
+      "parameters": {
+        "jsCode": "const result = $input.first().json;\nconst preparedData = $('Prepare Data').first().json;\nconst meetingInfo = $('Extract UUID').first().json;\n\nconst now = new Date();\nconst kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);\nconst dateStr = kst.toISOString().slice(0, 10);\nconst hour = kst.getHours();\nconst sessionName = hour < 15 ? '\\uc624\\uc804\\ubc18 (09:30~10:30)' : '\\uc800\\ub141\\ubc18 (18:30~19:30)';\n\nconst summary = result.summary || {};\nconst details = result.details || {};\n\nlet processedList = '';\nif (details.processed && details.processed.length > 0) {\n  processedList = details.processed.map((p, i) => \n    `  ${i + 1}. ${p.name} (${p.email}) \\u2014 \\uc794\\uc5ec ${p.remaining}\\ud68c`\n  ).join('\\n');\n} else {\n  processedList = '  (\\uc5c6\\uc74c)';\n}\n\nlet alreadyList = '';\nif (details.already_done && details.already_done.length > 0) {\n  alreadyList = details.already_done.map((p, i) => \n    `  ${i + 1}. ${p.name} (${p.email})`\n  ).join('\\n');\n} else {\n  alreadyList = '  (\\uc5c6\\uc74c)';\n}\n\nlet noPassList = '';\nif (details.no_pass && details.no_pass.length > 0) {\n  noPassList = details.no_pass.map((p, i) => \n    `  ${i + 1}. ${p.name} (${p.email}) \\u26a0\\ufe0f \\uc774\\uc6a9\\uad8c \\uc5c6\\uc74c`\n  ).join('\\n');\n} else {\n  noPassList = '  (\\uc5c6\\uc74c)';\n}\n\nlet notFoundList = '';\nif (details.not_found && details.not_found.length > 0) {\n  notFoundList = details.not_found.map((p, i) => \n    `  ${i + 1}. ${p.name || '(\\uc774\\ub984\\uc5c6\\uc74c)'} (${p.email})`\n  ).join('\\n');\n} else {\n  notFoundList = '  (\\uc5c6\\uc74c)';\n}\n\nlet participantDurations = '';\nif (preparedData.participants && preparedData.participants.length > 0) {\n  participantDurations = preparedData.participants\n    .filter(p => p.email !== 'junseong@junseonghwang.com')\n    .map((p, i) => {\n      const mins = Math.round(p.duration / 60) || p.duration;\n      return `  ${i + 1}. ${p.name} \\u2014 ${mins}\\ubd84 \\ucc38\\uc5ec`;\n    }).join('\\n');\n  if (!participantDurations) participantDurations = '  (\\uc5c6\\uc74c)';\n} else {\n  participantDurations = '  (\\uc5c6\\uc74c)';\n}\n\nconst line = '\\u2501'.repeat(30);\nconst reportText = `${line}\\n\\ud83d\\udccb \\uc5d0\\ub2c8\\uc5b4\\uadf8\\ub7a8 \\uc694\\uac00 \\uc218\\uc5c5 \\ubcf4\\uace0\\uc11c\\n${line}\\n\\n\\ud83d\\udcc5 \\ub0a0\\uc9dc: ${dateStr}\\n\\ud83d\\udd50 \\uc2dc\\uac04\\ub300: ${sessionName}\\n\\ud83d\\udccc \\ubbf8\\ud305 \\uc8fc\\uc81c: ${meetingInfo.topic || 'Daily Yoga Class'}\\n\\n${line}\\n\\ud83d\\udcca \\ucd9c\\uc11d \\uc694\\uc57d\\n${line}\\n  \\ucd1d \\ucc38\\uac00\\uc790: ${summary.total_participants || 0}\\uba85\\n  \\ucd9c\\uc11d \\ucc98\\ub9ac: ${summary.processed || 0}\\uba85\\n  \\uc911\\ubcf5 (\\uc774\\ubbf8 \\ucc98\\ub9ac): ${summary.already_done || 0}\\uba85\\n  \\uc774\\uc6a9\\uad8c \\uc5c6\\uc74c: ${summary.no_pass || 0}\\uba85\\n  \\ubbf8\\ub4f1\\ub85d \\ucc38\\uac00\\uc790: ${summary.not_found || 0}\\uba85\\n  \\ud638\\uc2a4\\ud2b8 \\uc81c\\uc678: ${summary.host_skipped || 0}\\uba85\\n\\n${line}\\n\\u2705 \\ucd9c\\uc11d \\ucc98\\ub9ac\\ub41c \\ud68c\\uc6d0 (\\uc794\\uc5ec \\ud69f\\uc218)\\n${line}\\n${processedList}\\n\\n${line}\\n\\u23f1\\ufe0f \\ucc38\\uac00\\uc790\\ubcc4 \\ucc38\\uc5ec \\uc2dc\\uac04\\n${line}\\n${participantDurations}\\n\\n${line}\\n\\u26a0\\ufe0f \\uc8fc\\uc758 \\ud544\\uc694\\n${line}\\n\\ud83d\\udd38 \\uc774\\uc6a9\\uad8c \\uc18c\\uc9c4 \\ud68c\\uc6d0:\\n${noPassList}\\n\\n\\ud83d\\udd38 \\ubbf8\\ub4f1\\ub85d \\ucc38\\uac00\\uc790 (\\ud648\\ud398\\uc774\\uc9c0 \\ubbf8\\uac00\\uc785):\\n${notFoundList}\\n\\n\\ud83d\\udd38 \\uc911\\ubcf5 \\ucc98\\ub9ac \\uc2dc\\ub3c4:\\n${alreadyList}\\n\\n${line}\\n\\uc774 \\ubcf4\\uace0\\uc11c\\ub294 \\uc790\\ub3d9\\uc73c\\ub85c \\uc0dd\\uc131\\ub418\\uc5c8\\uc2b5\\ub2c8\\ub2e4.\\nhttps://junseonghwang.com/admin\\n${line}`;\n\nconst emailPayload = {\n  from: '\\ud669\\uc900\\uc131 <junseong@junseonghwang.com>',\n  to: 'thereadingmaker@gmail.com',\n  subject: `[\\uc218\\uc5c5\\ubcf4\\uace0\\uc11c] ${dateStr} ${sessionName} \\u2014 \\ucc38\\uc11d ${summary.processed || 0}\\uba85`,\n  text: reportText\n};\n\nreturn [{ json: emailPayload }];"
+      },
+      "id": "prepare-report",
+      "name": "Build Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2340, -100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.resend.com/emails",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer re_RfLPds6p_GxskQTJaTUCpn4HHengcj64y"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "send-report-email",
+      "name": "Send Report Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2600, -200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://discord.com/api/webhooks/1470651597640962138/dFDBwRlV7FfFBO0x-VJB2Vk_kJPAjy2QCGVd3msIcrwXd_X3WEKyZPvHCF1ij1TisFv9",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"content\": \"\ud83d\udccb **\ucd9c\uc11d \ucc98\ub9ac \uc644\ub8cc**\\n- \ucd1d \ucc38\uac00\uc790: {{ $('Send Attendance').first().json.summary.total_participants || 0 }}\uba85\\n- \ucd9c\uc11d \ucc98\ub9ac: {{ $('Send Attendance').first().json.summary.processed || 0 }}\uba85\\n- \uc774\uc6a9\uad8c \uc5c6\uc74c: {{ $('Send Attendance').first().json.summary.no_pass || 0 }}\uba85\\n- \ubbf8\ub4f1\ub85d: {{ $('Send Attendance').first().json.summary.not_found || 0 }}\uba85\"}",
+        "options": {}
+      },
+      "id": "discord-zoom-report",
+      "name": "Discord \ucd9c\uc11d \uc694\uc57d",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2600, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://discord.com/api/webhooks/1470651597640962138/dFDBwRlV7FfFBO0x-VJB2Vk_kJPAjy2QCGVd3msIcrwXd_X3WEKyZPvHCF1ij1TisFv9",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"content\": \"\u274c **\ucd9c\uc11d \ucc98\ub9ac \uc2e4\ud328**\\n- \uc5d0\ub7ec: {{ JSON.stringify($json).substring(0, 300) }}\"}",
+        "options": {}
+      },
+      "id": "discord-zoom-fail",
+      "name": "Discord \ucd9c\uc11d \uc2e4\ud328",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2340, 100]
+    }
+  ],
+  "connections": {
+    "Schedule": {
+      "main": [
+        [
+          {
+            "node": "Zoom OAuth Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zoom OAuth Token": {
+      "main": [
+        [
+          {
+            "node": "Get Instances",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Instances": {
+      "main": [
+        [
+          {
+            "node": "Extract UUID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract UUID": {
+      "main": [
+        [
+          {
+            "node": "Has Meeting",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Meeting": {
+      "main": [
+        [
+          {
+            "node": "Get Participants",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Get Participants": {
+      "main": [
+        [
+          {
+            "node": "Prepare Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Data": {
+      "main": [
+        [
+          {
+            "node": "Send Attendance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Attendance": {
+      "main": [
+        [
+          {
+            "node": "\ucd9c\uc11d \uacb0\uacfc \ud655\uc778",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\ucd9c\uc11d \uacb0\uacfc \ud655\uc778": {
+      "main": [
+        [
+          {
+            "node": "Build Report",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Discord \ucd9c\uc11d \uc2e4\ud328",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Report": {
+      "main": [
+        [
+          {
+            "node": "Send Report Email",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Discord \ucd9c\uc11d \uc694\uc57d",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

@@ -1,0 +1,271 @@
+{
+  "name": "Care SMS",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 10 * * *"
+            }
+          ]
+        }
+      },
+      "id": "care-trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://junseonghwang.com/api/webhook/care-sms-targets",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "5f5366838ff98aa9a1946dfafb66915d49eda9670a3ad8d8c94d4d24f472dbc3"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-care-targets",
+      "name": "Fetch Care Targets",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst items = $input.all();\nconst targets = items[0].json.targets || [];\n\nconst results = [];\nfor (const t of targets) {\n  if (!t.phone) continue;\n  const phone = t.phone.replace(/[-\\s]/g, '');\n  if (phone.length < 10) continue;\n\n  let expiresStr = '';\n  if (t.expires_at) {\n    const d = new Date(t.expires_at);\n    expiresStr = d.getFullYear() + '년 ' + (d.getMonth() + 1) + '월 ' + d.getDate() + '일';\n  }\n\n  let msg = '';\n  if (t.sms_type === 'expiring_7d') {\n    msg = t.name + '님, 데일리 요가 클래스 이용권이 7일 후 만료됩니다.\\n\\n남은 횟수: ' + t.remaining_classes + '회\\n만료일: ' + expiresStr + '\\n\\n꾸준한 수련을 이어가고 싶으시다면\\n이용권을 갱신해주세요.\\n▶ https://junseonghwang.com\\n\\n문의: 070-7954-8182';\n  } else if (t.sms_type === 'inactive_7d') {\n    msg = t.name + '님, 요즘 어떻게 지내고 계신가요?\\n\\n한동안 수업에서 뵙지 못해 궁금했습니다.\\n바쁜 일상 속에서도 몸이 필요로 하는 시간을\\n잊지 않으시길 바랍니다.\\n\\n편하실 때 언제든 다시 뵙겠습니다.\\n\\nZoom 입장: https://us06web.zoom.us/j/87426930070?pwd=FFf88PQ1ZeyP8MJ1gCMqW6oaB35qqZ.1\\n* Zoom 암호: yoga\\n\\n— 요가코치 황준성';\n  } else if (t.sms_type === 'renewal_1left') {\n    msg = t.name + '님, 데일리 요가 클래스 이용권이\\n1회 남았습니다.\\n\\n지금까지의 수련이 만들어 온 변화가\\n여기서 멈추지 않았으면 합니다.\\n\\n다음 이용권을 준비하시려면\\n아래에서 신청해주세요.\\n▶ https://junseonghwang.com\\n\\n문의: 070-7954-8182';\n  }\n\n  if (msg) {\n    results.push({\n      json: {\n        phone: phone,\n        name: t.name,\n        message: msg,\n        user_id: t.user_id,\n        class_pass_id: t.class_pass_id,\n        sms_type: t.sms_type\n      }\n    });\n  }\n}\n\nreturn results.length > 0 ? results : [{ json: { skip: true } }];\n"
+      },
+      "id": "prepare-care-sms",
+      "name": "Prepare Care SMS",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "skip-check-care",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notTrue"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "filter-skip-care",
+      "name": "Has Targets?",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst items = $input.all();\nconst results = [];\n\nconst apiKey = 'NCS4FNOFBWYK96ZI';\nconst apiSecret = 'E6SA8I6NCT04MKTQN8TX0Y4SSGHEJMGR';\n\nfor (const item of items) {\n  const date = new Date().toISOString();\n  const salt = crypto.randomBytes(32).toString('hex');\n  const hmac = crypto.createHmac('sha256', apiSecret);\n  hmac.update(date + salt);\n  const signature = hmac.digest('hex');\n  const authHeader = 'HMAC-SHA256 apiKey=' + apiKey + ', date=' + date + ', salt=' + salt + ', signature=' + signature;\n\n  results.push({\n    json: {\n      ...item.json,\n      auth_header: authHeader\n    }\n  });\n}\n\nreturn results;\n"
+      },
+      "id": "hmac-auth-care",
+      "name": "HMAC Auth",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.solapi.com/messages/v4/send",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $json.auth_header }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"message\": {\n    \"to\": \"{{ $json.phone }}\",\n    \"from\": \"07079548182\",\n    \"text\": {{ JSON.stringify($json.message) }},\n    \"type\": \"LMS\"\n  }\n}",
+        "options": {}
+      },
+      "id": "send-care-sms",
+      "name": "Send SMS via Solapi",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "sms-success-check-care",
+              "leftValue": "={{ $json.statusCode }}",
+              "rightValue": "2000",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "check-care-sms-result",
+      "name": "SMS Success?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1320, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://junseonghwang.com/api/webhook/care-sms-log",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "5f5366838ff98aa9a1946dfafb66915d49eda9670a3ad8d8c94d4d24f472dbc3"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"user_id\": {{ $('Prepare Care SMS').item.json.user_id }},\n  \"class_pass_id\": {{ $('Prepare Care SMS').item.json.class_pass_id }},\n  \"sms_type\": \"{{ $('Prepare Care SMS').item.json.sms_type }}\"\n}",
+        "options": {}
+      },
+      "id": "log-care-sms",
+      "name": "Log Care SMS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, -100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://discord.com/api/webhooks/1470651597640962138/dFDBwRlV7FfFBO0x-VJB2Vk_kJPAjy2QCGVd3msIcrwXd_X3WEKyZPvHCF1ij1TisFv9",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": \"⚠️ Care SMS 발송 실패\\n회원: {{ $('Prepare Care SMS').item.json.name }}\\n전화: {{ $('Prepare Care SMS').item.json.phone }}\\n유형: {{ $('Prepare Care SMS').item.json.sms_type }}\\n응답: {{ JSON.stringify($json).substring(0, 300) }}\"\n}",
+        "options": {}
+      },
+      "id": "discord-fail-care",
+      "name": "Discord SMS Fail",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 100]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Care Targets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Care Targets": {
+      "main": [
+        [
+          {
+            "node": "Prepare Care SMS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Care SMS": {
+      "main": [
+        [
+          {
+            "node": "Has Targets?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Targets?": {
+      "main": [
+        [
+          {
+            "node": "HMAC Auth",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HMAC Auth": {
+      "main": [
+        [
+          {
+            "node": "Send SMS via Solapi",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send SMS via Solapi": {
+      "main": [
+        [
+          {
+            "node": "SMS Success?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SMS Success?": {
+      "main": [
+        [
+          {
+            "node": "Log Care SMS",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Discord SMS Fail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
