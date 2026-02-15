@@ -157,10 +157,11 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
       );
 
       // 5. Create payment record
-      await client.query(
-        "INSERT INTO payments (user_id, amount, depositor_name, status, confirmed_at, class_pass_id, transaction_id) VALUES ($1, $2, $3, 'confirmed', NOW(), $4, $5)",
+      const paymentInsert = await client.query(
+        "INSERT INTO payments (user_id, amount, depositor_name, status, confirmed_at, class_pass_id, transaction_id) VALUES ($1, $2, $3, 'confirmed', NOW(), $4, $5) RETURNING id",
         [userId, paidAmount || expectedAmount, depositor_name || application.name, passResult.rows[0].id, transaction_id || null]
       );
+      const paymentId = paymentInsert.rows[0].id;
 
       // 6. Update application
       await client.query(
@@ -194,6 +195,7 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
         status: overpaidInfo ? 'overpaid' : 'confirmed',
         application_created_at: application.created_at,
         user_id: userId,
+        payment_id: paymentId,
         temp_password: tempPassword,
         user_name: application.name,
         user_email: application.email,
