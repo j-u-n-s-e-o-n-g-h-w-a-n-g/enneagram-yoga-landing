@@ -267,12 +267,28 @@ let paymentPage = 1;
 const PAGE_SIZE = 20;
 let currentPaymentStatus = 'all';
 let currentPaymentSearch = '';
+let csrfToken = '';
+
+// Load CSRF token on page load
+fetch('/api/csrf-token').then(r=>r.json()).then(d=>{csrfToken=d.csrfToken}).catch(()=>{});
+
+function apiFetch(url, options = {}) {
+  if (!options.headers) options.headers = {};
+  if (!(options.body instanceof FormData)) options.headers['Content-Type'] = options.headers['Content-Type'] || 'application/json';
+  if (csrfToken) options.headers['X-CSRF-Token'] = csrfToken;
+  return fetch(url, options);
+}
 
 function showToast(msg, type = '') {
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.className = 'toast ' + type + ' show';
   setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#x27;');
 }
 
 function showLoading(id) {
@@ -296,7 +312,7 @@ function renderPagination(containerId, currentPage, totalPages, onPageChange) {
 }
 
 async function checkAuth() {
-  const res = await fetch('/api/me');
+  const res = await apiFetch('/api/me');
   const data = await res.json();
   if (!data.loggedIn) { window.location.href = '/login'; return; }
   if (data.user.role !== 'admin') { window.location.href = '/mypage'; return; }
@@ -312,7 +328,7 @@ async function loadDashboard() {
 
 async function loadStats() {
   try {
-    const res = await fetch('/api/admin/stats');
+    const res = await apiFetch('/api/admin/stats');
     const data = await res.json();
     document.getElementById('statMembers').textContent = data.totalMembers;
     document.getElementById('statPending').textContent = data.pendingPayments;
@@ -328,7 +344,7 @@ async function loadPayments(status, search, page) {
   if (page !== undefined) paymentPage = page;
   showLoading('paymentList');
   try {
-    const res = await fetch('/api/admin/payments?status=' + currentPaymentStatus + (currentPaymentSearch ? '&search=' + encodeURIComponent(currentPaymentSearch) : '') + '&page=' + paymentPage + '&limit=' + PAGE_SIZE);
+    const res = await apiFetch('/api/admin/payments?status=' + currentPaymentStatus + (currentPaymentSearch ? '&search=' + encodeURIComponent(currentPaymentSearch) : '') + '&page=' + paymentPage + '&limit=' + PAGE_SIZE);
     const data = await res.json();
     const payments = data.payments || [];
     const total = (data.pagination && data.pagination.total) || data.total || payments.length;
@@ -350,8 +366,8 @@ async function loadPayments(status, search, page) {
         const confirmedDate = new Date(p.confirmed_at).toLocaleDateString('ko-KR');
         action = '<span style="font-size:0.7rem;color:#888">' + confirmedDate + ' 확인</span>';
       }
-      action += ' <button class="action-btn danger" style="margin-left:4px;padding:4px 10px;font-size:0.65rem" onclick="deletePayment(' + p.id + ',\'' + (p.user_name||'').replace(/'/g,"\\'") + '\',' + p.amount + ')">삭제</button>';
-      html += '<tr><td>' + date + '</td><td>' + p.user_name + '</td><td>' + p.user_phone + '</td><td>' + (p.depositor_name || '-') + '</td><td>' + p.amount.toLocaleString() + '원</td><td><span class="badge ' + badge + '">' + label + '</span></td><td>' + action + '</td></tr>';
+      action += ' <button class="action-btn danger" style="margin-left:4px;padding:4px 10px;font-size:0.65rem" onclick="deletePayment(' + p.id + ',\'' + escapeHtml((p.user_name||'').replace(/'/g,"\\'")) + '\',' + p.amount + ')">삭제</button>';
+      html += '<tr><td>' + date + '</td><td>' + escapeHtml(p.user_name) + '</td><td>' + escapeHtml(p.user_phone) + '</td><td>' + escapeHtml(p.depositor_name || '-') + '</td><td>' + p.amount.toLocaleString() + '원</td><td><span class="badge ' + badge + '">' + label + '</span></td><td>' + action + '</td></tr>';
     });
     html += '</tbody></table>';
     document.getElementById('paymentList').innerHTML = html;
@@ -363,7 +379,7 @@ function goPaymentPage(page) { loadPayments(undefined, undefined, page); }
 async function loadMembers(search) {
   showLoading('memberList');
   try {
-    const res = await fetch('/api/admin/members' + (search ? '?search=' + encodeURIComponent(search) : ''));
+    const res = await apiFetch('/api/admin/members' + (search ? '?search=' + encodeURIComponent(search) : ''));
     const data = await res.json();
     if (data.members.length === 0) {
       document.getElementById('memberList').innerHTML = '<div class="empty-state">회원이 없습니다</div>';
@@ -372,7 +388,7 @@ async function loadMembers(search) {
     let html = '<table><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Remaining</th><th>Attended</th><th>Joined</th><th>Action</th></tr></thead><tbody>';
     data.members.forEach(m => {
       const date = new Date(m.created_at).toLocaleDateString('ko-KR');
-      html += '<tr class="clickable" onclick="openMemberDetail(' + m.id + ')"><td><strong>' + m.name + '</strong></td><td>' + m.email + '</td><td>' + m.phone + '</td><td><strong>' + m.remaining_classes + '회</strong></td><td>' + m.total_attended + '회</td><td>' + date + '</td><td><button class="action-btn small" onclick="event.stopPropagation();markAttend(' + m.id + ')">출석</button></td></tr>';
+      html += '<tr class="clickable" onclick="openMemberDetail(' + m.id + ')"><td><strong>' + escapeHtml(m.name) + '</strong></td><td>' + escapeHtml(m.email) + '</td><td>' + escapeHtml(m.phone) + '</td><td><strong>' + m.remaining_classes + '회</strong></td><td>' + m.total_attended + '회</td><td>' + date + '</td><td><button class="action-btn small" onclick="event.stopPropagation();markAttend(' + m.id + ')">출석</button></td></tr>';
     });
     html += '</tbody></table>';
     document.getElementById('memberList').innerHTML = html;
@@ -381,7 +397,7 @@ async function loadMembers(search) {
 
 async function loadApplications(status){
   try{
-    const res=await fetch('/api/admin/applications?status='+status);
+    const res=await apiFetch('/api/admin/applications?status='+status);
     const data=await res.json();
     if(!data.applications||data.applications.length===0){
       document.getElementById('applicationList').innerHTML='<div class="empty-state">신청 내역이 없습니다</div>';
@@ -392,10 +408,10 @@ async function loadApplications(status){
       const date=new Date(a.created_at).toLocaleDateString('ko-KR');
       const badge=a.status==='paid'?'badge-confirmed':'badge-pending';
       const label=a.status==='paid'?'입금완료':'대기';
-      const safeN=a.name.replace(/'/g,"\\'");
-      const safeE=a.email.replace(/'/g,"\\'");
-      const safeP=(a.phone||'').replace(/'/g,"\\'");
-      html+='<tr><td>'+date+'</td><td>'+a.name+'</td><td>'+a.email+'</td><td>'+a.phone+'</td><td><span class="badge '+badge+'">'+label+'</span></td><td><button class="action-btn small" onclick="event.stopPropagation();openAppEdit('+a.id+',\''+safeN+'\',\''+safeE+'\',\''+safeP+'\')">수정</button> <button class="action-btn small danger" onclick="event.stopPropagation();deleteApplication('+a.id+',\''+safeN+'\')">삭제</button></td></tr>';
+      const safeN=escapeHtml(a.name).replace(/'/g,"\\'");
+      const safeE=escapeHtml(a.email).replace(/'/g,"\\'");
+      const safeP=escapeHtml(a.phone||'').replace(/'/g,"\\'");
+      html+='<tr><td>'+date+'</td><td>'+escapeHtml(a.name)+'</td><td>'+escapeHtml(a.email)+'</td><td>'+escapeHtml(a.phone)+'</td><td><span class="badge '+badge+'">'+label+'</span></td><td><button class="action-btn small" onclick="event.stopPropagation();openAppEdit('+a.id+',\''+safeN+'\',\''+safeE+'\',\''+safeP+'\')">수정</button> <button class="action-btn small danger" onclick="event.stopPropagation();deleteApplication('+a.id+',\''+safeN+'\')">삭제</button></td></tr>';
     });
     html+='</tbody></table>';
     document.getElementById('applicationList').innerHTML=html;
@@ -412,7 +428,7 @@ function filterApplications(status,btn){
 async function openMemberDetail(userId) {
   currentMemberId = userId;
   try {
-    const res = await fetch('/api/admin/members/' + userId);
+    const res = await apiFetch('/api/admin/members/' + userId);
     const data = await res.json();
     if (data.error) { showToast(data.error, 'error'); return; }
 
@@ -431,8 +447,8 @@ async function openMemberDetail(userId) {
     // Info
     const joined = new Date(data.user.created_at).toLocaleDateString('ko-KR');
     document.getElementById('detailInfo').innerHTML =
-      '<div class="detail-info-item"><div class="di-label">Email</div><div class="di-value">' + data.user.email + '</div></div>' +
-      '<div class="detail-info-item"><div class="di-label">Phone</div><div class="di-value">' + data.user.phone + '</div></div>' +
+      '<div class="detail-info-item"><div class="di-label">Email</div><div class="di-value">' + escapeHtml(data.user.email) + '</div></div>' +
+      '<div class="detail-info-item"><div class="di-label">Phone</div><div class="di-value">' + escapeHtml(data.user.phone) + '</div></div>' +
       '<div class="detail-info-item"><div class="di-label">Joined</div><div class="di-value">' + joined + '</div></div>';
 
     // Stats
@@ -475,7 +491,7 @@ function renderAttendanceLog(attendance) {
     const dt = new Date(a.attended_at);
     const date = dt.toLocaleDateString('ko-KR');
     const time = dt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
-    const note = a.note || '-';
+    const note = escapeHtml(a.note || '-');
     html += '<tr><td>' + (i + 1) + '</td><td>' + date + '</td><td>' + time + '</td><td style="font-size:0.76rem;color:#888">' + note + '</td></tr>';
   });
   html += '</tbody></table>';
@@ -512,7 +528,7 @@ function renderCreditLogs(logs) {
     const dt = new Date(l.created_at);
     const date = dt.toLocaleDateString('ko-KR');
     const time = dt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
-    html += '<tr><td>' + date + ' ' + time + '</td><td><strong>+' + l.credits + '회</strong></td><td>' + (l.class_pass_id || '-') + '</td><td style="font-size:0.76rem;color:#888">' + (l.note || '-') + '</td></tr>';
+    html += '<tr><td>' + date + ' ' + time + '</td><td><strong>+' + l.credits + '회</strong></td><td>' + (l.class_pass_id || '-') + '</td><td style="font-size:0.76rem;color:#888">' + escapeHtml(l.note || '-') + '</td></tr>';
   });
   html += '</tbody></table>';
   document.getElementById('detailCreditLogs').innerHTML = html;
@@ -529,7 +545,7 @@ function renderPaymentsDetail(payments) {
     const badge = p.status === 'confirmed' ? 'badge-confirmed' : 'badge-pending';
     const label = p.status === 'confirmed' ? '확인완료' : p.status === 'underpaid' ? '부족' : '대기';
     const confirmed = p.confirmed_at ? new Date(p.confirmed_at).toLocaleDateString('ko-KR') : '-';
-    html += '<tr><td>' + date + '</td><td>' + p.amount.toLocaleString() + '원</td><td>' + (p.depositor_name || '-') + '</td><td><span class="badge ' + badge + '">' + label + '</span></td><td>' + confirmed + '</td></tr>';
+    html += '<tr><td>' + date + '</td><td>' + p.amount.toLocaleString() + '원</td><td>' + escapeHtml(p.depositor_name || '-') + '</td><td><span class="badge ' + badge + '">' + label + '</span></td><td>' + confirmed + '</td></tr>';
   });
   html += '</tbody></table>';
   document.getElementById('detailPayments').innerHTML = html;
@@ -543,7 +559,7 @@ async function addCredits() {
   if (!confirm(credits + '회를 추가하시겠습니까?')) return;
 
   try {
-    const res = await fetch('/api/admin/members/' + currentMemberId + '/add-credits', {
+    const res = await apiFetch('/api/admin/members/' + currentMemberId + '/add-credits', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ credits, note })
@@ -573,7 +589,7 @@ function closeDetail() {
 
 async function loadNotifications(userId) {
   try {
-    const res = await fetch('/api/admin/members/' + userId + '/notifications');
+    const res = await apiFetch('/api/admin/members/' + userId + '/notifications');
     const data = await res.json();
     renderNotifications(data.notifications);
   } catch (err) { console.error(err); }
@@ -613,7 +629,7 @@ async function resendNotification(type) {
   const labels = { sms: 'SMS', email: '이메일', cashreceipt: '현금영수증' };
   if (!confirm(labels[type] + '을(를) 재발송하시겠습니까?')) return;
   try {
-    const res = await fetch('/api/admin/members/' + currentMemberId + '/resend', {
+    const res = await apiFetch('/api/admin/members/' + currentMemberId + '/resend', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type })
@@ -653,7 +669,7 @@ function switchDetailTab(tab, clickedBtn) {
 async function confirmPayment(id) {
   if (!confirm('입금을 확인하고 이용권을 활성화하시겠습니까?')) return;
   try {
-    const res = await fetch('/api/admin/payments/' + id + '/confirm', { method: 'POST' });
+    const res = await apiFetch('/api/admin/payments/' + id + '/confirm', { method: 'POST' });
     const data = await res.json();
     if (data.success) { showToast('입금 확인 완료', 'success'); loadDashboard(); }
     else { showToast(data.error, 'error'); }
@@ -663,7 +679,7 @@ async function confirmPayment(id) {
 async function deletePayment(id, name, amount) {
   if (!confirm(name + '님의 입금 내역(' + (amount||0).toLocaleString() + '원)을 삭제하시겠습니까?\n\n⚠ 이 작업은 되돌릴 수 없습니다.')) return;
   try {
-    const res = await fetch('/api/admin/payments/' + id, { method: 'DELETE' });
+    const res = await apiFetch('/api/admin/payments/' + id, { method: 'DELETE' });
     const data = await res.json();
     if (data.success) { showToast('결제 삭제 완료', 'success'); loadDashboard(); }
     else { showToast(data.error || '삭제 실패', 'error'); }
@@ -673,7 +689,7 @@ async function deletePayment(id, name, amount) {
 async function markAttend(userId) {
   if (!confirm('해당 회원의 출석을 처리하시겠습니까? (잔여 횟수 -1)')) return;
   try {
-    const res = await fetch('/api/admin/members/' + userId + '/attend', {
+    const res = await apiFetch('/api/admin/members/' + userId + '/attend', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ note: new Date().toLocaleDateString('ko-KR') + ' 수업' })
@@ -701,7 +717,7 @@ function searchPaymentsFn(){const q=document.getElementById('searchPayments').va
 function searchMembersFn(){const q=document.getElementById('searchMembers').value;loadMembers(q);}
 
 async function logout() {
-  await fetch('/api/logout', { method: 'POST' });
+  await apiFetch('/api/logout', { method: 'POST' });
   window.location.href = '/';
 }
 
@@ -730,7 +746,7 @@ async function saveMemberEdit() {
   const phone = document.getElementById('editPhone').value.trim();
   if (!name) { showToast('이름을 입력해주세요', 'error'); return; }
   try {
-    const res = await fetch('/api/admin/members/' + currentMemberId, {
+    const res = await apiFetch('/api/admin/members/' + currentMemberId, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, email, phone })
@@ -762,7 +778,7 @@ async function deleteMember() {
   if (!currentMemberId) return;
   hideDeleteConfirm();
   try {
-    const res = await fetch('/api/admin/members/' + currentMemberId, { method: 'DELETE' });
+    const res = await apiFetch('/api/admin/members/' + currentMemberId, { method: 'DELETE' });
     const data = await res.json();
     if (data.success) {
       showToast(data.message, 'success');
@@ -801,7 +817,7 @@ async function saveAppEdit() {
   const phone = document.getElementById('appEditPhone').value.trim();
   if (!name) { showToast('이름을 입력해주세요', 'error'); return; }
   try {
-    const res = await fetch('/api/admin/applications/' + currentAppEditId, {
+    const res = await apiFetch('/api/admin/applications/' + currentAppEditId, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, email, phone })
@@ -822,7 +838,7 @@ async function saveAppEdit() {
 async function deleteApplication(id, name) {
   if (!confirm(name + '님의 신청 내역을 삭제하시겠습니까?')) return;
   try {
-    const res = await fetch('/api/admin/applications/' + id, { method: 'DELETE' });
+    const res = await apiFetch('/api/admin/applications/' + id, { method: 'DELETE' });
     const data = await res.json();
     if (data.success) {
       showToast(data.message, 'success');
@@ -846,7 +862,7 @@ async function exportCSV(type) {
 
     if (type === 'payments') {
       showToast('결제 데이터 내보내는 중...', '');
-      const res = await fetch('/api/admin/payments?status=all&page=1&limit=9999');
+      const res = await apiFetch('/api/admin/payments?status=all&page=1&limit=9999');
       const data = await res.json();
       const payments = data.payments || [];
       rows.push(['날짜', '회원명', '전화번호', '입금자명', '금액', '상태', '확인일']);
@@ -866,7 +882,7 @@ async function exportCSV(type) {
 
     else if (type === 'members') {
       showToast('회원 데이터 내보내는 중...', '');
-      const res = await fetch('/api/admin/members?limit=9999');
+      const res = await apiFetch('/api/admin/members?limit=9999');
       const data = await res.json();
       const members = data.members || [];
       rows.push(['이름', '이메일', '전화번호', '잔여횟수', '총출석', '가입일']);
@@ -885,7 +901,7 @@ async function exportCSV(type) {
 
     else if (type === 'applications') {
       showToast('신청 데이터 내보내는 중...', '');
-      const res = await fetch('/api/admin/applications?status=all&limit=9999');
+      const res = await apiFetch('/api/admin/applications?status=all&limit=9999');
       const data = await res.json();
       const apps = data.applications || [];
       rows.push(['날짜', '이름', '이메일', '전화번호', '상태']);

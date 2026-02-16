@@ -70,12 +70,15 @@ footer p{font-size:0.7rem;color:#999;font-weight:300}
 </div>
 <footer><img class="logo-img" src="/images/signature.png" alt="Junseong Hwang"><p>&copy; 2026 Junseong Hwang. All rights reserved.</p></footer>
 <script>
+let csrfToken='';
+fetch('/api/csrf-token').then(r=>r.json()).then(d=>{csrfToken=d.csrfToken}).catch(()=>{});
+function apiFetch(url,opts={}){if(!opts.headers)opts.headers={};opts.headers['Content-Type']=opts.headers['Content-Type']||'application/json';if(csrfToken)opts.headers['X-CSRF-Token']=csrfToken;return fetch(url,opts);}
 document.getElementById('loginForm').addEventListener('submit', async function(e) {
   e.preventDefault();
   const errorMsg = document.getElementById('errorMsg');
   errorMsg.style.display = 'none';
   try {
-    const res = await fetch('/api/login', {
+    const res = await apiFetch('/api/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -104,7 +107,7 @@ async function resetPassword(){
   if(!email||!phone){msg.textContent='이메일과 전화번호를 입력해주세요';msg.style.color='#c44';return;}
   msg.textContent='처리 중...';msg.style.color='#888';
   try{
-    const res=await fetch('/api/reset-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,phone})});
+    const res=await apiFetch('/api/reset-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,phone})});
     const data=await res.json();
     if(data.success){msg.textContent='임시 비밀번호가 SMS로 발송되었습니다.';msg.style.color='#2e7d32';}
     else{msg.textContent=data.error||'오류가 발생했습니다';msg.style.color='#c44';}

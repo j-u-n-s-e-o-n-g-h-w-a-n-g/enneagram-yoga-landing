@@ -167,6 +167,22 @@ async function initDB() {
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_notification_log_user ON notification_log (user_id);`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_notification_log_payment ON notification_log (payment_id);`);
+    // Audit log (관리자 작업 이력)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS audit_log (
+        id SERIAL PRIMARY KEY,
+        admin_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        action VARCHAR(50) NOT NULL,
+        detail JSONB,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_audit_log_admin ON audit_log (admin_id);`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log (action);`);
+    // Soft delete columns
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;`);
+    await client.query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;`);
+    await client.query(`ALTER TABLE applications ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;`);
     // Performance indexes for frequently queried columns
     await client.query(`CREATE INDEX IF NOT EXISTS idx_users_phone ON users (phone);`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_users_email ON users (email);`);

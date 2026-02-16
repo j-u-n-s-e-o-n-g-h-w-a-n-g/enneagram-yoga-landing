@@ -1,3 +1,14 @@
+async function logAudit(pool, adminId, action, detail) {
+  try {
+    await pool.query(
+      'INSERT INTO audit_log (admin_id, action, detail) VALUES ($1, $2, $3)',
+      [adminId, action, JSON.stringify(detail)]
+    );
+  } catch (err) {
+    console.error('Audit log error:', err.message);
+  }
+}
+
 module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, services }) {
   const { requireDB, requireAdmin } = middleware;
   const { sendSMS } = services.sms;
@@ -15,7 +26,7 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
       const limit = parseInt(req.query.limit) || 20;
       const offset = (page - 1) * limit;
 
-      let whereClause = "WHERE u.role = 'member'";
+      let whereClause = "WHERE u.role = 'member' AND u.deleted_at IS NULL";
       const params = [];
       if (search) {
         whereClause += " AND (u.name ILIKE $1 OR u.email ILIKE $1 OR u.phone ILIKE $1)";
@@ -53,7 +64,7 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
     try {
       const userId = req.params.id;
       const userResult = await pool.query(
-        'SELECT id, name, email, phone, password_is_temp, created_at FROM users WHERE id = $1 AND role = $2',
+        'SELECT id, name, email, phone, password_is_temp, created_at FROM users WHERE id = $1 AND role = $2 AND deleted_at IS NULL',
         [userId, 'member']
       );
       if (userResult.rows.length === 0) return res.status(404).json({ error: '회원을 찾을 수 없습니다' });
@@ -115,33 +126,17 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
 
   app.delete('/api/admin/members/:id', requireDB, requireAdmin, async (req, res) => {
     const pool = getPool();
-    const client = await pool.connect();
     try {
       const userId = req.params.id;
-      // 회원 존재 여부 확인
-      const userCheck = await client.query('SELECT id, name FROM users WHERE id = $1 AND role = $2', [userId, 'member']);
-      if (userCheck.rows.length === 0) {
-        client.release();
-        return res.status(404).json({ error: '회원을 찾을 수 없습니다' });
-      }
+      const userCheck = await pool.query('SELECT id, name FROM users WHERE id = $1 AND role = $2 AND deleted_at IS NULL', [userId, 'member']);
+      if (userCheck.rows.length === 0) return res.status(404).json({ error: '회원을 찾을 수 없습니다' });
       const userName = userCheck.rows[0].name;
-      await client.query('BEGIN');
-      // CASCADE 순서: attendance → class_passes → payments → care_sms_log → journaling_sms_log → users
-      await client.query('DELETE FROM attendance WHERE user_id = $1', [userId]);
-      await client.query('DELETE FROM care_sms_log WHERE user_id = $1', [userId]);
-      await client.query('DELETE FROM journaling_sms_log WHERE user_id = $1', [userId]);
-      await client.query('DELETE FROM credit_logs WHERE user_id = $1', [userId]);
-      await client.query('DELETE FROM class_passes WHERE user_id = $1', [userId]);
-      await client.query('DELETE FROM payments WHERE user_id = $1', [userId]);
-      await client.query('DELETE FROM users WHERE id = $1', [userId]);
-      await client.query('COMMIT');
+      await pool.query('UPDATE users SET deleted_at = NOW() WHERE id = $1', [userId]);
+      await logAudit(pool, req.session.userId, 'delete_member', { member_id: userId, member_name: userName });
       res.json({ success: true, message: userName + ' 회원이 삭제되었습니다' });
     } catch (err) {
-      await client.query('ROLLBACK');
       console.error('Admin member delete error:', err);
       res.status(500).json({ error: '서버 오류' });
-    } finally {
-      client.release();
     }
   });
 
@@ -187,6 +182,7 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
         "SELECT COALESCE(SUM(remaining_classes), 0) as total_remaining FROM class_passes WHERE user_id = $1 AND status = 'active'",
         [userId]
       );
+      await logAudit(pool, req.session.userId, 'add_credits', { member_id: userId, credits: addCount, note: note || '' });
       res.json({
         success: true,
         added: addCount,
@@ -234,17 +230,17 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
       const limit = parseInt(req.query.limit) || 20;
       const offset = (page - 1) * limit;
 
-      let whereClause = '';
+      let whereClause = ' WHERE p.deleted_at IS NULL';
       const params = [];
       let paramIdx = 1;
 
       if (status !== 'all') {
-        whereClause += ' WHERE p.status = $' + paramIdx;
+        whereClause += ' AND p.status = $' + paramIdx;
         params.push(status);
         paramIdx++;
       }
       if (search) {
-        whereClause += (whereClause ? ' AND' : ' WHERE') + ' (u.name ILIKE $' + paramIdx + ' OR u.phone ILIKE $' + paramIdx + ' OR p.depositor_name ILIKE $' + paramIdx + ')';
+        whereClause += ' AND (u.name ILIKE $' + paramIdx + ' OR u.phone ILIKE $' + paramIdx + ' OR p.depositor_name ILIKE $' + paramIdx + ')';
         params.push('%' + search + '%');
         paramIdx++;
       }
@@ -289,6 +285,7 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
         ['confirmed', passResult.rows[0].id, paymentId]
       );
       await client.query('COMMIT');
+      await logAudit(pool, req.session.userId, 'confirm_payment', { payment_id: paymentId });
       res.json({ success: true, pass: passResult.rows[0] });
     } catch (err) {
       await client.query('ROLLBACK');
@@ -305,9 +302,10 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
     const pool = getPool();
     try {
       const paymentId = req.params.id;
-      const payment = await pool.query('SELECT * FROM payments WHERE id = $1', [paymentId]);
+      const payment = await pool.query('SELECT * FROM payments WHERE id = $1 AND deleted_at IS NULL', [paymentId]);
       if (payment.rows.length === 0) { return res.status(404).json({ error: '결제를 찾을 수 없습니다' }); }
-      await pool.query('DELETE FROM payments WHERE id = $1', [paymentId]);
+      await pool.query('UPDATE payments SET deleted_at = NOW() WHERE id = $1', [paymentId]);
+      await logAudit(pool, req.session.userId, 'delete_payment', { payment_id: paymentId });
       res.json({ success: true });
     } catch (err) {
       console.error('Delete payment error:', err);
@@ -353,11 +351,11 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
   app.get('/api/admin/stats', requireDB, requireAdmin, async (req, res) => {
     const pool = getPool();
     try {
-      const totalMembers = await pool.query("SELECT COUNT(*) FROM users WHERE role = 'member'");
-      const pendingPayments = await pool.query("SELECT COUNT(*) FROM payments WHERE status = 'pending'");
+      const totalMembers = await pool.query("SELECT COUNT(*) FROM users WHERE role = 'member' AND deleted_at IS NULL");
+      const pendingPayments = await pool.query("SELECT COUNT(*) FROM payments WHERE status = 'pending' AND deleted_at IS NULL");
       const activePasses = await pool.query("SELECT COUNT(*) FROM class_passes WHERE status = 'active' AND remaining_classes > 0");
       const todayAttendance = await pool.query("SELECT COUNT(*) FROM attendance WHERE attended_at::date = CURRENT_DATE");
-      const pendingApps = await pool.query("SELECT COUNT(*) FROM applications WHERE status = 'pending'");
+      const pendingApps = await pool.query("SELECT COUNT(*) FROM applications WHERE status = 'pending' AND deleted_at IS NULL");
       res.json({
         totalMembers: parseInt(totalMembers.rows[0].count),
         pendingPayments: parseInt(pendingPayments.rows[0].count),
@@ -382,17 +380,17 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
       const limit = parseInt(req.query.limit) || 20;
       const offset = (page - 1) * limit;
 
-      let whereClause = '';
+      let whereClause = ' WHERE deleted_at IS NULL';
       const params = [];
       let paramIdx = 1;
 
       if (status !== 'all') {
-        whereClause += ' WHERE status = $' + paramIdx;
+        whereClause += ' AND status = $' + paramIdx;
         params.push(status);
         paramIdx++;
       }
       if (search) {
-        whereClause += (whereClause ? ' AND' : ' WHERE') + ' (name ILIKE $' + paramIdx + ' OR email ILIKE $' + paramIdx + ' OR phone ILIKE $' + paramIdx + ')';
+        whereClause += ' AND (name ILIKE $' + paramIdx + ' OR email ILIKE $' + paramIdx + ' OR phone ILIKE $' + paramIdx + ')';
         params.push('%' + search + '%');
         paramIdx++;
       }
@@ -450,11 +448,12 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
     const pool = getPool();
     try {
       const appId = req.params.id;
-      const appCheck = await pool.query('SELECT id, name, status FROM applications WHERE id = $1', [appId]);
+      const appCheck = await pool.query('SELECT id, name, status FROM applications WHERE id = $1 AND deleted_at IS NULL', [appId]);
       if (appCheck.rows.length === 0) return res.status(404).json({ error: '신청 내역을 찾을 수 없습니다' });
 
       const appName = appCheck.rows[0].name;
-      await pool.query('DELETE FROM applications WHERE id = $1', [appId]);
+      await pool.query('UPDATE applications SET deleted_at = NOW() WHERE id = $1', [appId]);
+      await logAudit(pool, req.session.userId, 'delete_application', { application_id: appId });
       res.json({ success: true, message: appName + '님의 신청 내역이 삭제되었습니다' });
     } catch (err) {
       console.error('Admin application delete error:', err);

@@ -71,7 +71,7 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
 
       // 2. Check amount - underpaid (24시간 이내 부분입금만 합산)
       if (paidAmount > 0 && paidAmount < expectedAmount) {
-        const existingUserForCheck = await client.query('SELECT id FROM users WHERE email = $1 LIMIT 1', [application.email]);
+        const existingUserForCheck = await client.query('SELECT id FROM users WHERE email = $1 AND deleted_at IS NULL LIMIT 1', [application.email]);
         const existingUserId = existingUserForCheck.rows.length > 0 ? existingUserForCheck.rows[0].id : null;
 
         let previousTotal = 0;
@@ -134,7 +134,7 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
       let userId;
       let isNewUser = false;
       let tempPassword = null;
-      const existingUser = await client.query('SELECT id, email FROM users WHERE email = $1', [application.email]);
+      const existingUser = await client.query('SELECT id, email FROM users WHERE email = $1 AND deleted_at IS NULL', [application.email]);
 
       if (existingUser.rows.length > 0) {
         userId = existingUser.rows[0].id;

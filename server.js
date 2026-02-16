@@ -81,6 +81,37 @@ if (initPool) {
 }
 app.use(session(sessionConfig));
 
+// ===================== CSRF Protection =====================
+app.use((req, res, next) => {
+  if (req.session && !req.session.csrfToken) {
+    req.session.csrfToken = crypto.randomBytes(32).toString('hex');
+  }
+  next();
+});
+
+app.get('/api/csrf-token', (req, res) => {
+  res.json({ csrfToken: req.session.csrfToken });
+});
+
+function requireCsrf(req, res, next) {
+  if (req.headers['x-api-key']) return next();
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+  const token = req.headers['x-csrf-token'];
+  if (!token || token !== req.session?.csrfToken) {
+    return res.status(403).json({ error: 'CSRF 토큰이 유효하지 않습니다' });
+  }
+  next();
+}
+
+app.use('/api/admin', requireCsrf);
+app.use('/api/login', requireCsrf);
+app.use('/api/register', requireCsrf);
+app.use('/api/logout', requireCsrf);
+app.use('/api/change-password', requireCsrf);
+app.use('/api/reset-password', requireCsrf);
+app.use('/api/applications', requireCsrf);
+app.use('/api/members', requireCsrf);
+
 // ===================== 라우트 컨텍스트 =====================
 const routeContext = { getPool, isDBReady, CONFIG, middleware, services };
 

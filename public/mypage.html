@@ -127,6 +127,9 @@ footer p{font-size:0.7rem;color:#999;font-weight:300}
 </div>
 <footer><img class="logo-img" src="/images/signature.png" alt="Junseong Hwang"><p>&copy; 2026 Junseong Hwang. All rights reserved.</p></footer>
 <script>
+let csrfToken='';
+fetch('/api/csrf-token').then(r=>r.json()).then(d=>{csrfToken=d.csrfToken}).catch(()=>{});
+function apiFetch(url,opts={}){if(!opts.headers)opts.headers={};opts.headers['Content-Type']=opts.headers['Content-Type']||'application/json';if(csrfToken)opts.headers['X-CSRF-Token']=csrfToken;return fetch(url,opts);}
 async function checkAuth() {
   const res = await fetch('/api/me');
   const data = await res.json();
@@ -246,10 +249,10 @@ async function changePassword() {
   var newPw = document.getElementById('newPw').value;
   var newPwConfirm = document.getElementById('newPwConfirm').value;
   if (!currentPw || !newPw || !newPwConfirm) { msgEl.textContent = '모든 필드를 입력해주세요'; msgEl.className = 'pw-msg error'; return; }
-  if (newPw.length < 6) { msgEl.textContent = '새 비밀번호는 6자 이상이어야 합니다'; msgEl.className = 'pw-msg error'; return; }
+  if (newPw.length < 8) { msgEl.textContent = '새 비밀번호는 8자 이상이어야 합니다'; msgEl.className = 'pw-msg error'; return; }
   if (newPw !== newPwConfirm) { msgEl.textContent = '새 비밀번호가 일치하지 않습니다'; msgEl.className = 'pw-msg error'; return; }
   try {
-    var res = await fetch('/api/change-password', {
+    var res = await apiFetch('/api/change-password', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ current_password: currentPw, new_password: newPw })
@@ -271,7 +274,7 @@ async function changePassword() {
 }
 async function requestPass() {
   try {
-    var res = await fetch('/api/passes/request', {
+    var res = await apiFetch('/api/passes/request', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({})
@@ -284,7 +287,7 @@ async function requestPass() {
   } catch (err) { console.error(err); }
 }
 async function logout() {
-  await fetch('/api/logout', { method: 'POST' });
+  await apiFetch('/api/logout', { method: 'POST' });
   window.location.href = '/';
 }
 function toggleMenu(){document.querySelector('nav ul').classList.toggle('open');}
