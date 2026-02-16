@@ -16,7 +16,10 @@ if (DB_URL) {
   console.log('🔗 Found database URL, connecting...');
   pool = new Pool({
     connectionString: DB_URL,
-    ssl: { rejectUnauthorized: false }
+    ssl: { rejectUnauthorized: false },
+    max: 10,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 5000
   });
   pool.on('error', (err) => {
     console.error('Unexpected pool error:', err);
@@ -195,6 +198,7 @@ async function initDB() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance (attended_at);`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_attendance_user_date ON attendance (user_id, attended_at);`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_attendance_zoom_uuid ON attendance (zoom_meeting_uuid);`);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_attendance_user_zoom ON attendance (user_id, zoom_meeting_uuid) WHERE zoom_meeting_uuid IS NOT NULL;`);
     dbReady = true;
     console.log('✅ Database tables initialized successfully');
   } catch (err) {

@@ -104,14 +104,24 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
       const { name, email, phone } = req.body;
       if (!name || !name.trim()) return res.status(400).json({ error: '이름을 입력해주세요' });
 
+      if (email && email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+        return res.status(400).json({ error: '올바른 이메일 형식이 아닙니다' });
+      }
+      if (phone && phone.trim()) {
+        const normalizedPhone = phone.trim().replace(/[-\s]/g, '');
+        if (!/^01[016789]\d{7,8}$/.test(normalizedPhone)) {
+          return res.status(400).json({ error: '올바른 전화번호 형식이 아닙니다' });
+        }
+      }
+
       // 이메일 중복 확인 (자기 자신 제외)
       if (email && email.trim()) {
-        const dup = await pool.query('SELECT id FROM users WHERE email = $1 AND id != $2', [email.trim(), userId]);
+        const dup = await pool.query('SELECT id FROM users WHERE email = $1 AND id != $2 AND deleted_at IS NULL', [email.trim(), userId]);
         if (dup.rows.length > 0) return res.status(400).json({ error: '이미 사용 중인 이메일입니다' });
       }
 
       const result = await pool.query(
-        'UPDATE users SET name = $1, email = $2, phone = $3 WHERE id = $4 AND role = $5 RETURNING id, name, email, phone',
+        'UPDATE users SET name = $1, email = $2, phone = $3 WHERE id = $4 AND role = $5 AND deleted_at IS NULL RETURNING id, name, email, phone',
         [name.trim(), (email || '').trim(), (phone || '').trim(), userId, 'member']
       );
       if (result.rows.length === 0) return res.status(404).json({ error: '회원을 찾을 수 없습니다' });
@@ -155,7 +165,7 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
         return res.status(400).json({ error: '추가할 횟수는 1~100 사이여야 합니다' });
       }
       const passResult = await client.query(
-        "SELECT * FROM class_passes WHERE user_id = $1 AND status = 'active' ORDER BY purchased_at DESC LIMIT 1",
+        "SELECT * FROM class_passes WHERE user_id = $1 AND status = 'active' AND (expires_at IS NULL OR expires_at > NOW()) ORDER BY purchased_at DESC LIMIT 1",
         [userId]
       );
       let passId;
@@ -167,8 +177,8 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
         );
       } else {
         const newPass = await client.query(
-          "INSERT INTO class_passes (user_id, total_classes, remaining_classes, status, expires_at) VALUES ($1, $2, $2, 'active', NOW() + INTERVAL '" + CONFIG.PASS_MONTHS + " months') RETURNING id",
-          [userId, addCount]
+          "INSERT INTO class_passes (user_id, total_classes, remaining_classes, status, expires_at) VALUES ($1, $2, $2, 'active', NOW() + ($3 * INTERVAL '1 month')) RETURNING id",
+          [userId, addCount, CONFIG.PASS_MONTHS]
         );
         passId = newPass.rows[0].id;
       }
@@ -277,8 +287,8 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
       if (payment.rows.length === 0) { await client.query('ROLLBACK'); return res.status(404).json({ error: '결제를 찾을 수 없습니다' }); }
       if (payment.rows[0].status === 'confirmed') { await client.query('ROLLBACK'); return res.status(400).json({ error: '이미 확인된 결제입니다' }); }
       const passResult = await client.query(
-        "INSERT INTO class_passes (user_id, total_classes, remaining_classes, status, expires_at) VALUES ($1, $2, $2, $3, NOW() + INTERVAL '" + CONFIG.PASS_MONTHS + " months') RETURNING *",
-        [payment.rows[0].user_id, CONFIG.PASS_CLASSES, 'active']
+        "INSERT INTO class_passes (user_id, total_classes, remaining_classes, status, expires_at) VALUES ($1, $2, $2, $3, NOW() + ($4 * INTERVAL '1 month')) RETURNING *",
+        [payment.rows[0].user_id, CONFIG.PASS_CLASSES, 'active', CONFIG.PASS_MONTHS]
       );
       await client.query(
         'UPDATE payments SET status = $1, confirmed_at = NOW(), class_pass_id = $2 WHERE id = $3',
@@ -304,8 +314,12 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
       const paymentId = req.params.id;
       const payment = await pool.query('SELECT * FROM payments WHERE id = $1 AND deleted_at IS NULL', [paymentId]);
       if (payment.rows.length === 0) { return res.status(404).json({ error: '결제를 찾을 수 없습니다' }); }
+      // If payment was confirmed and has a class_pass, deactivate the pass
+      if (payment.rows[0].status === 'confirmed' && payment.rows[0].class_pass_id) {
+        await pool.query("UPDATE class_passes SET status = 'cancelled' WHERE id = $1", [payment.rows[0].class_pass_id]);
+      }
       await pool.query('UPDATE payments SET deleted_at = NOW() WHERE id = $1', [paymentId]);
-      await logAudit(pool, req.session.userId, 'delete_payment', { payment_id: paymentId });
+      await logAudit(pool, req.session.userId, 'delete_payment', { payment_id: paymentId, had_pass: !!payment.rows[0].class_pass_id });
       res.json({ success: true });
     } catch (err) {
       console.error('Delete payment error:', err);
@@ -322,7 +336,7 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
       await client.query('BEGIN');
       const userId = req.params.id;
       const passResult = await client.query(
-        "SELECT * FROM class_passes WHERE user_id = $1 AND status = 'active' AND remaining_classes > 0 ORDER BY purchased_at ASC LIMIT 1",
+        "SELECT * FROM class_passes WHERE user_id = $1 AND status = 'active' AND remaining_classes > 0 AND (expires_at IS NULL OR expires_at > NOW()) ORDER BY purchased_at ASC LIMIT 1",
         [userId]
       );
       if (passResult.rows.length === 0) { await client.query('ROLLBACK'); return res.status(400).json({ error: '사용 가능한 이용권이 없습니다' }); }
@@ -485,7 +499,7 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
     try {
       const userId = req.params.id;
       const { type } = req.body;
-      const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
+      const userResult = await pool.query('SELECT * FROM users WHERE id = $1 AND deleted_at IS NULL', [userId]);
       if (userResult.rows.length === 0) return res.status(404).json({ error: '회원을 찾을 수 없습니다' });
       const user = userResult.rows[0];
       const payResult = await pool.query("SELECT * FROM payments WHERE user_id = $1 AND status = 'confirmed' ORDER BY confirmed_at DESC LIMIT 1", [userId]);

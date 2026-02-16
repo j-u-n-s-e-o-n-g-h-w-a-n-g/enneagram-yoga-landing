@@ -41,11 +41,12 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
 
   // Rate limiters
   const loginLimiter = rateLimit(10, 15 * 60 * 1000);
+  const registerLimiter = rateLimit(5, 60 * 60 * 1000);
   const resetPasswordLimiter = rateLimit(5, 30 * 60 * 1000);
 
   // ===================== AUTH: register =====================
 
-  app.post('/api/register', requireDB, async (req, res) => {
+  app.post('/api/register', requireDB, registerLimiter, async (req, res) => {
     const pool = getPool();
     try {
       const { name, email, phone, password } = req.body;
@@ -68,8 +69,8 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
 
       if (password.length < 8) return res.status(400).json({ error: '비밀번호는 8자 이상이어야 합니다' });
 
-      const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
-      if (existing.rows.length > 0) return res.status(400).json({ error: '이미 가입된 이메일입니다' });
+      const existing = await pool.query('SELECT id FROM users WHERE email = $1 AND deleted_at IS NULL', [email]);
+      if (existing.rows.length > 0) return res.status(400).json({ error: '가입할 수 없습니다. 이미 가입된 이메일이거나 입력 정보를 확인해주세요' });
       const hashed = await bcrypt.hash(password, 10);
       const result = await pool.query(
         'INSERT INTO users (name, email, phone, password) VALUES ($1, $2, $3, $4) RETURNING id, name, email, role',
@@ -101,7 +102,7 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
       req.session.userId = user.id;
       req.session.userName = user.name;
       req.session.userRole = user.role;
-      res.json({ success: true, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+      res.json({ success: true, user: { id: user.id, name: user.name, email: user.email, role: user.role, password_is_temp: user.password_is_temp } });
     } catch (err) {
       console.error('Login error:', err);
       res.status(500).json({ error: '서버 오류가 발생했습니다' });

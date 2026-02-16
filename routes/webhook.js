@@ -8,6 +8,15 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
   const bcrypt = require('bcryptjs');
   const { generateTempPassword } = require('../words');
 
+  function validateWebhookInput(body, maxLengths) {
+    for (const [key, max] of Object.entries(maxLengths)) {
+      if (body[key] && String(body[key]).length > max) {
+        return `${key} exceeds maximum length of ${max}`;
+      }
+    }
+    return null;
+  }
+
   // ===================== WEBHOOK: payment-confirm =====================
 
   app.post('/api/webhook/payment-confirm', requireDB, requireApiKey, async (req, res) => {
@@ -46,19 +55,19 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
       const normalizedPhone = phone ? phone.replace(/[-\s]/g, '') : null;
       if (normalizedPhone) {
         appResult = await client.query(
-          "SELECT * FROM applications WHERE REPLACE(REPLACE(phone, '-', ''), ' ', '') = $1 AND status = 'pending' ORDER BY created_at DESC LIMIT 1",
+          "SELECT * FROM applications WHERE REPLACE(REPLACE(phone, '-', ''), ' ', '') = $1 AND status = 'pending' AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1",
           [normalizedPhone]
         );
       }
       if ((!appResult || appResult.rows.length === 0) && email) {
         appResult = await client.query(
-          "SELECT * FROM applications WHERE email = $1 AND status = 'pending' ORDER BY created_at DESC LIMIT 1",
+          "SELECT * FROM applications WHERE email = $1 AND status = 'pending' AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1",
           [email]
         );
       }
       if ((!appResult || appResult.rows.length === 0) && depositor_name) {
         appResult = await client.query(
-          "SELECT * FROM applications WHERE name = $1 AND status = 'pending' ORDER BY created_at DESC LIMIT 1",
+          "SELECT * FROM applications WHERE name = $1 AND status = 'pending' AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1",
           [depositor_name]
         );
       }
@@ -152,8 +161,8 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
 
       // 4. Create class pass
       const passResult = await client.query(
-        "INSERT INTO class_passes (user_id, total_classes, remaining_classes, status, expires_at) VALUES ($1, $2, $2, 'active', NOW() + INTERVAL '" + CONFIG.PASS_MONTHS + " months') RETURNING *",
-        [userId, CONFIG.PASS_CLASSES]
+        "INSERT INTO class_passes (user_id, total_classes, remaining_classes, status, expires_at) VALUES ($1, $2, $2, 'active', NOW() + ($3 * INTERVAL '1 month')) RETURNING *",
+        [userId, CONFIG.PASS_CLASSES, CONFIG.PASS_MONTHS]
       );
 
       // 5. Create payment record
@@ -244,7 +253,7 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
         }
 
         const userResult = await client.query(
-          'SELECT id, name, email FROM users WHERE LOWER(email) = $1',
+          'SELECT id, name, email FROM users WHERE LOWER(email) = $1 AND deleted_at IS NULL',
           [email]
         );
         if (userResult.rows.length === 0) {
@@ -442,6 +451,9 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
 
   app.post('/api/webhook/send-sms', requireDB, requireApiKey, async (req, res) => {
     try {
+      const validationError = validateWebhookInput(req.body, { to: 20, text: 2000 });
+      if (validationError) return res.status(400).json({ error: validationError });
+
       const { phone, message, sms_type, user_id, class_pass_id, log_table, payment_id } = req.body;
       if (!phone || !message) return res.status(400).json({ error: 'phone, message 필수' });
       const cleanPhone = phone.replace(/[-\s]/g, '');
@@ -477,6 +489,9 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
 
   app.post('/api/webhook/send-email', requireDB, requireApiKey, async (req, res) => {
     try {
+      const validationError = validateWebhookInput(req.body, { to: 255, subject: 500, html: 50000 });
+      if (validationError) return res.status(400).json({ error: validationError });
+
       const { to, from: fromAddr, subject, html, text, attachments, user_id, payment_id } = req.body;
       if (!to || !subject || (!html && !text)) return res.status(400).json({ error: 'to, subject, html/text 필수' });
 
@@ -518,6 +533,9 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
 
   app.post('/api/webhook/notify-discord', requireDB, requireApiKey, async (req, res) => {
     try {
+      const validationError = validateWebhookInput(req.body, { message: 4000 });
+      if (validationError) return res.status(400).json({ error: validationError });
+
       const { message } = req.body;
       if (!message) {
         return res.status(400).json({ error: 'message 필수' });
@@ -536,7 +554,7 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
   app.get('/api/webhook/backup', requireDB, requireApiKey, async (req, res) => {
     const pool = getPool();
     try {
-      const users = await pool.query('SELECT id, name, email, phone, role, password_is_temp, created_at FROM users ORDER BY id');
+      const users = await pool.query('SELECT id, name, email, phone, role, password_is_temp, created_at, deleted_at FROM users ORDER BY id');
       const applications = await pool.query('SELECT * FROM applications ORDER BY id');
       const classPasses = await pool.query('SELECT * FROM class_passes ORDER BY id');
       const payments = await pool.query('SELECT * FROM payments ORDER BY id');
@@ -581,7 +599,7 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
       const dateStr = kst.toISOString().slice(0, 10);
 
       // Gather backup data
-      const users = await pool.query('SELECT id, name, email, phone, role, password_is_temp, created_at FROM users ORDER BY id');
+      const users = await pool.query('SELECT id, name, email, phone, role, password_is_temp, created_at, deleted_at FROM users ORDER BY id');
       const applications = await pool.query('SELECT * FROM applications ORDER BY id');
       const classPasses = await pool.query('SELECT * FROM class_passes ORDER BY id');
       const payments = await pool.query('SELECT * FROM payments ORDER BY id');

@@ -18,15 +18,15 @@ const CONFIG = {
   BANK_NAME: process.env.BANK_NAME || '농협',
   BANK_ACCOUNT: process.env.BANK_ACCOUNT || '312-0025-5524-11',
   BANK_HOLDER: process.env.BANK_HOLDER || '황준성',
-  HOST_EMAIL: process.env.HOST_EMAIL || 'junseong@junseonghwang.com',
-  SOLAPI_API_KEY: process.env.SOLAPI_API_KEY || 'NCS4FNOFBWYK96ZI',
-  SOLAPI_API_SECRET: process.env.SOLAPI_API_SECRET || 'E6SA8I6NCT04MKTQN8TX0Y4SSGHEJMGR',
-  SOLAPI_SENDER: process.env.SOLAPI_SENDER || '07079548182',
-  RESEND_API_KEY: process.env.RESEND_API_KEY || 're_RfLPds6p_GxskQTJaTUCpn4HHengcj64y',
-  POPBILL_LINK_ID: process.env.POPBILL_LINK_ID || 'ENNEAGRAM',
-  POPBILL_SECRET_KEY: process.env.POPBILL_SECRET_KEY || 'q52EkWadYGB1H6FghRyzWxW7u1jbNwHk74+k48vprag=',
-  POPBILL_CORP_NUM: process.env.POPBILL_CORP_NUM || '6660203422',
-  DISCORD_WEBHOOK_URL: process.env.DISCORD_WEBHOOK_URL || 'https://discord.com/api/webhooks/1470651597640962138/dFDBwRlV7FfFBO0x-VJB2Vk_kJPAjy2QCGVd3msIcrwXd_X3WEKyZPvHCF1ij1TisFv9',
+  HOST_EMAIL: process.env.HOST_EMAIL || '',
+  SOLAPI_API_KEY: process.env.SOLAPI_API_KEY || '',
+  SOLAPI_API_SECRET: process.env.SOLAPI_API_SECRET || '',
+  SOLAPI_SENDER: process.env.SOLAPI_SENDER || '',
+  RESEND_API_KEY: process.env.RESEND_API_KEY || '',
+  POPBILL_LINK_ID: process.env.POPBILL_LINK_ID || '',
+  POPBILL_SECRET_KEY: process.env.POPBILL_SECRET_KEY || '',
+  POPBILL_CORP_NUM: process.env.POPBILL_CORP_NUM || '',
+  DISCORD_WEBHOOK_URL: process.env.DISCORD_WEBHOOK_URL || '',
 };
 
 // ===================== 서비스 초기화 =====================
@@ -54,9 +54,18 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Security headers
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+
 // ===================== SESSION (before routes!) =====================
 const sessionConfig = {
-  secret: process.env.SESSION_SECRET || 'enneagram-yoga-secret-key-change-in-production',
+  secret: process.env.SESSION_SECRET || (() => { console.warn('⚠️ SESSION_SECRET not set, using random key'); return crypto.randomBytes(32).toString('hex'); })(),
   resave: false,
   saveUninitialized: false,
   cookie: {
@@ -94,7 +103,6 @@ app.get('/api/csrf-token', (req, res) => {
 });
 
 function requireCsrf(req, res, next) {
-  if (req.headers['x-api-key']) return next();
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
   const token = req.headers['x-csrf-token'];
   if (!token || token !== req.session?.csrfToken) {
@@ -103,7 +111,6 @@ function requireCsrf(req, res, next) {
   next();
 }
 
-app.use('/api/admin', requireCsrf);
 app.use('/api/login', requireCsrf);
 app.use('/api/register', requireCsrf);
 app.use('/api/logout', requireCsrf);
@@ -111,6 +118,21 @@ app.use('/api/change-password', requireCsrf);
 app.use('/api/reset-password', requireCsrf);
 app.use('/api/applications', requireCsrf);
 app.use('/api/members', requireCsrf);
+app.use('/api/admin', requireCsrf);
+
+// ===================== Rate Limiter =====================
+const appRateLimiter = (() => {
+  const attempts = new Map();
+  setInterval(() => { const now = Date.now(); for (const [k,v] of attempts) { if (now - v.t > 3600000) attempts.delete(k); } }, 600000).unref();
+  return (req, res, next) => {
+    const ip = req.ip;
+    const now = Date.now();
+    const r = attempts.get(ip);
+    if (!r || now - r.t > 3600000) { attempts.set(ip, { c: 1, t: now }); return next(); }
+    if (r.c >= 10) return res.status(429).json({ error: '너무 많은 요청입니다.' });
+    r.c++; next();
+  };
+})();
 
 // ===================== 라우트 컨텍스트 =====================
 const routeContext = { getPool, isDBReady, CONFIG, middleware, services };
@@ -130,7 +152,7 @@ app.get('/api/config', (req, res) => {
 
 // ===================== APPLICATION API (공개) =====================
 
-app.post('/api/applications', middleware.requireDB, async (req, res) => {
+app.post('/api/applications', middleware.requireDB, appRateLimiter, async (req, res) => {
   const pool = getPool();
   try {
     const { name, email, phone } = req.body;
@@ -184,14 +206,15 @@ app.get('/api/health', (req, res) => {
 // ===================== START =====================
 
 async function start() {
-  try {
-    await initDB();
-  } catch (err) {
-    console.error('DB init failed, continuing without DB:', err.message);
-  }
-  app.listen(PORT, '0.0.0.0', () => {
+  try { await initDB(); } catch (err) { console.error('DB init failed:', err.message); }
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ Server running on port ${PORT}`);
     console.log(`   Database: ${isDBReady() ? 'Connected' : 'Not connected'}`);
+  });
+  process.on('SIGTERM', () => {
+    console.log('SIGTERM received, shutting down...');
+    server.close(() => { const p = getPool(); if (p) p.end(); process.exit(0); });
+    setTimeout(() => process.exit(1), 10000);
   });
 }
 start();
