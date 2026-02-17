@@ -532,4 +532,126 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
       res.status(500).json({ error: '서버 오류' });
     }
   });
+
+  // ===================== ADMIN: 단체 SMS 대상 조회 =====================
+
+  app.get('/api/admin/bulk-sms/targets', requireDB, requireAdmin, async (req, res) => {
+    const pool = getPool();
+    try {
+      const type = req.query.type || 'active';
+      let result;
+
+      if (type === 'active') {
+        // 유효한 이용권 보유 회원 (잔여 > 0 + 만료 안됨)
+        result = await pool.query(`
+          SELECT u.id, u.name, u.phone, u.email,
+            COALESCE(SUM(cp.remaining_classes), 0) as remaining_classes
+          FROM users u
+          JOIN class_passes cp ON cp.user_id = u.id
+            AND cp.status = 'active' AND cp.remaining_classes > 0
+            AND (cp.expires_at IS NULL OR cp.expires_at > NOW())
+          WHERE u.role = 'member' AND u.deleted_at IS NULL
+            AND u.phone IS NOT NULL AND u.phone != ''
+          GROUP BY u.id, u.name, u.phone, u.email
+          ORDER BY u.name
+        `);
+      } else {
+        // 유효 이용권 없는 회원
+        result = await pool.query(`
+          SELECT u.id, u.name, u.phone, u.email, 0 as remaining_classes
+          FROM users u
+          WHERE u.role = 'member' AND u.deleted_at IS NULL
+            AND u.phone IS NOT NULL AND u.phone != ''
+            AND NOT EXISTS (
+              SELECT 1 FROM class_passes cp
+              WHERE cp.user_id = u.id AND cp.status = 'active' AND cp.remaining_classes > 0
+                AND (cp.expires_at IS NULL OR cp.expires_at > NOW())
+            )
+          ORDER BY u.name
+        `);
+      }
+
+      res.json({ members: result.rows, count: result.rows.length });
+    } catch (err) {
+      console.error('Bulk SMS targets error:', err);
+      res.status(500).json({ error: '서버 오류' });
+    }
+  });
+
+  // ===================== ADMIN: 단체 SMS 발송 =====================
+
+  app.post('/api/admin/bulk-sms', requireDB, requireAdmin, async (req, res) => {
+    const pool = getPool();
+    try {
+      const { type, message } = req.body;
+      if (!type || !message || !message.trim()) {
+        return res.status(400).json({ error: '발송 대상과 메시지를 입력해주세요' });
+      }
+      if (message.length > 2000) {
+        return res.status(400).json({ error: '메시지는 2000자 이하로 입력해주세요' });
+      }
+
+      // 대상 회원 조회
+      let members;
+      if (type === 'active') {
+        const result = await pool.query(`
+          SELECT u.id, u.name, u.phone
+          FROM users u
+          JOIN class_passes cp ON cp.user_id = u.id
+            AND cp.status = 'active' AND cp.remaining_classes > 0
+            AND (cp.expires_at IS NULL OR cp.expires_at > NOW())
+          WHERE u.role = 'member' AND u.deleted_at IS NULL
+            AND u.phone IS NOT NULL AND u.phone != ''
+          GROUP BY u.id, u.name, u.phone
+        `);
+        members = result.rows;
+      } else {
+        const result = await pool.query(`
+          SELECT u.id, u.name, u.phone
+          FROM users u
+          WHERE u.role = 'member' AND u.deleted_at IS NULL
+            AND u.phone IS NOT NULL AND u.phone != ''
+            AND NOT EXISTS (
+              SELECT 1 FROM class_passes cp
+              WHERE cp.user_id = u.id AND cp.status = 'active' AND cp.remaining_classes > 0
+                AND (cp.expires_at IS NULL OR cp.expires_at > NOW())
+            )
+        `);
+        members = result.rows;
+      }
+
+      if (members.length === 0) {
+        return res.status(400).json({ error: '발송 대상이 없습니다' });
+      }
+
+      // 순차 발송
+      let sent = 0;
+      let failed = 0;
+      const details = [];
+
+      for (const member of members) {
+        const personalMsg = message.replace(/\{name\}/g, member.name);
+        try {
+          const { success, groupId } = await sendSMS(member.phone, personalMsg);
+          if (success) {
+            sent++;
+            details.push({ name: member.name, phone: member.phone, status: 'success' });
+          } else {
+            failed++;
+            details.push({ name: member.name, phone: member.phone, status: 'failed' });
+          }
+          await logNotification(pool, member.id, null, 'sms', success ? 'success' : 'failed', { groupId, bulk: true, bulk_type: type });
+        } catch (smsErr) {
+          failed++;
+          details.push({ name: member.name, phone: member.phone, status: 'error' });
+        }
+      }
+
+      await logAudit(pool, req.session.userId, 'bulk_sms', { type, total: members.length, sent, failed, message: message.substring(0, 100) });
+      res.json({ success: true, total: members.length, sent, failed, details });
+    } catch (err) {
+      console.error('Bulk SMS error:', err);
+      res.status(500).json({ error: '서버 오류' });
+    }
+  });
 };

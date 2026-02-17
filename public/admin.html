@@ -142,6 +142,7 @@ footer p{font-size:0.7rem;color:#999;font-weight:300}
 <button class="tab active" onclick="switchTab('payments')">입금 관리</button>
 <button class="tab" onclick="switchTab('members')">회원 관리</button>
 <button class="tab" onclick="switchTab('applications')">신청 관리</button>
+<button class="tab" onclick="switchTab('bulk-sms')">단체 SMS</button>
 </div>
 <div class="tab-content active" id="tab-payments">
 <div style="margin-bottom:16px"><input type="text" id="searchPayments" placeholder="이름, 전화번호, 입금자명으로 검색..." style="width:100%;padding:10px;border:1px solid var(--border);font-family:'Noto Serif KR',serif;font-size:0.82rem;outline:none" onkeyup="if(event.key==='Enter')searchPaymentsFn()"><button class="action-btn small" style="margin-top:8px" onclick="searchPaymentsFn()">검색</button></div>
@@ -169,6 +170,35 @@ footer p{font-size:0.7rem;color:#999;font-weight:300}
 <button class="action-btn small" onclick="exportCSV('applications')">📥 CSV</button>
 </div>
 <div class="section-box"><div id="applicationList"><div class="empty-state">신청 내역이 없습니다</div></div></div>
+</div>
+<div class="tab-content" id="tab-bulk-sms">
+<div class="filter-row" style="margin-bottom:16px">
+<button class="filter-btn active" id="bulkTypeActive" onclick="switchBulkType('active', this)">이용권 보유 회원</button>
+<button class="filter-btn" id="bulkTypeInactive" onclick="switchBulkType('inactive', this)">이용권 미보유 회원</button>
+</div>
+<div class="section-box" style="margin-bottom:16px">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+<span style="font-size:0.82rem;font-weight:400">발송 대상: <strong id="bulkTargetCount">0</strong>명</span>
+<button class="action-btn small" onclick="toggleBulkTargetList()">목록 보기/숨기기</button>
+</div>
+<div id="bulkTargetList" style="display:none;max-height:200px;overflow-y:auto;border:1px solid var(--border);padding:12px;font-size:0.78rem;font-weight:300;line-height:1.8"></div>
+</div>
+<div class="section-box">
+<div style="margin-bottom:8px;font-size:0.72rem;color:var(--accent);font-weight:400;letter-spacing:0.1em">{name} = 회원 이름으로 자동 치환</div>
+<textarea id="bulkSmsMessage" placeholder="{name}님, [데일리 요가 클래스] 안내 메시지를 입력하세요..." style="width:100%;min-height:120px;padding:12px;border:1px solid var(--border);font-family:'Noto Serif KR',serif;font-size:0.82rem;font-weight:300;line-height:1.8;resize:vertical;outline:none" oninput="updateBulkCharCount()"></textarea>
+<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+<span style="font-size:0.72rem;color:#888" id="bulkCharCount">0자 (SMS)</span>
+<div style="display:flex;gap:8px">
+<button class="action-btn small" onclick="previewBulkSms()">미리보기</button>
+<button class="action-btn" onclick="sendBulkSms()" style="background:var(--accent);color:var(--white);border-color:var(--accent)">📱 전체 발송</button>
+</div>
+</div>
+<div id="bulkPreview" style="display:none;margin-top:12px;padding:12px;background:var(--section-bg);font-size:0.82rem;font-weight:300;line-height:1.8;white-space:pre-wrap"></div>
+</div>
+<div id="bulkResult" style="display:none;margin-top:16px" class="section-box">
+<div style="font-size:0.85rem;font-weight:400;margin-bottom:8px">발송 결과</div>
+<div id="bulkResultContent"></div>
+</div>
 </div>
 </div>
 
@@ -934,6 +964,100 @@ async function exportCSV(type) {
   } catch (err) {
     console.error('CSV export error:', err);
     showToast('CSV 내보내기 실패', 'error');
+  }
+}
+
+// ===================== 단체 SMS =====================
+let bulkTargets = [];
+let currentBulkType = 'active';
+
+function switchBulkType(type, btn) {
+  currentBulkType = type;
+  document.querySelectorAll('#tab-bulk-sms .filter-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  loadBulkTargets(type);
+}
+
+async function loadBulkTargets(type) {
+  try {
+    const res = await apiFetch('/api/admin/bulk-sms/targets?type=' + (type || 'active'));
+    const data = await res.json();
+    bulkTargets = data.members || [];
+    document.getElementById('bulkTargetCount').textContent = bulkTargets.length;
+    var listHtml = '';
+    bulkTargets.forEach(function(m) {
+      var maskedPhone = m.phone ? m.phone.replace(/(\d{3})(\d{3,4})(\d{4})/, '$1-****-$3') : '-';
+      listHtml += escapeHtml(m.name) + ' (' + maskedPhone + ')';
+      if (type === 'active') listHtml += ' · 잔여 ' + m.remaining_classes + '회';
+      listHtml += '<br>';
+    });
+    document.getElementById('bulkTargetList').innerHTML = listHtml || '<span style="color:#aaa">대상 회원이 없습니다</span>';
+    document.getElementById('bulkResult').style.display = 'none';
+  } catch (err) {
+    console.error('Load bulk targets error:', err);
+    showToast('대상 목록 조회 실패', 'error');
+  }
+}
+
+function toggleBulkTargetList() {
+  var el = document.getElementById('bulkTargetList');
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+function updateBulkCharCount() {
+  var msg = document.getElementById('bulkSmsMessage').value;
+  var len = msg.length;
+  var type = len > 90 ? 'LMS' : 'SMS';
+  document.getElementById('bulkCharCount').textContent = len + '자 (' + type + ')';
+}
+
+function previewBulkSms() {
+  var msg = document.getElementById('bulkSmsMessage').value;
+  if (!msg.trim()) { showToast('메시지를 입력해주세요', 'error'); return; }
+  var name = bulkTargets.length > 0 ? bulkTargets[0].name : '홍길동';
+  var preview = msg.replace(/\{name\}/g, name);
+  var previewEl = document.getElementById('bulkPreview');
+  previewEl.textContent = preview;
+  previewEl.style.display = 'block';
+}
+
+async function sendBulkSms() {
+  var msg = document.getElementById('bulkSmsMessage').value;
+  if (!msg.trim()) { showToast('메시지를 입력해주세요', 'error'); return; }
+  if (bulkTargets.length === 0) { showToast('발송 대상이 없습니다', 'error'); return; }
+  var label = currentBulkType === 'active' ? '이용권 보유' : '이용권 미보유';
+  if (!confirm(label + ' 회원 ' + bulkTargets.length + '명에게 SMS를 발송하시겠습니까?')) return;
+
+  try {
+    showToast('발송 중... (' + bulkTargets.length + '명)', '');
+    var res = await apiFetch('/api/admin/bulk-sms', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: currentBulkType, message: msg })
+    });
+    var data = await res.json();
+    if (data.success) {
+      var resultHtml = '<div style="font-size:0.82rem;font-weight:300;line-height:1.8">';
+      resultHtml += '전체 <strong>' + data.total + '</strong>명 · ';
+      resultHtml += '성공 <strong style="color:#2e7d32">' + data.sent + '</strong>명 · ';
+      resultHtml += '실패 <strong style="color:#c44">' + data.failed + '</strong>명</div>';
+      if (data.details && data.details.length > 0) {
+        resultHtml += '<div style="margin-top:8px;max-height:150px;overflow-y:auto;font-size:0.75rem;font-weight:300;line-height:1.8">';
+        data.details.forEach(function(d) {
+          var icon = d.status === 'success' ? '✅' : '❌';
+          resultHtml += icon + ' ' + escapeHtml(d.name) + '<br>';
+        });
+        resultHtml += '</div>';
+      }
+      document.getElementById('bulkResultContent').innerHTML = resultHtml;
+      document.getElementById('bulkResult').style.display = 'block';
+      showToast(data.sent + '명 발송 완료', 'success');
+    } else {
+      showToast(data.error || '발송 실패', 'error');
+    }
+  } catch (err) {
+    console.error('Bulk SMS error:', err);
+    showToast('발송 중 오류가 발생했습니다', 'error');
   }
 }
 
