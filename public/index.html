@@ -199,14 +199,11 @@ async function loadConfig(){
   try{const r=await fetch('/api/config');siteConfig=await r.json();}catch(e){console.log('Config load failed, using defaults');}
 }
 loadConfig();
-const GOOGLE_SCRIPT_URL='https://script.google.com/macros/s/AKfycbzIGDQrUyjyez0-QrzO0WiLi3LyXlRbALUnGTDSm9nVi5JzHSpXQuhgfrNiDmIrAHbn/exec';
 document.getElementById('privacyConsent').addEventListener('change',function(){document.getElementById('submitBtn').disabled=!this.checked});
 function handleSubmit(e){e.preventDefault();if(!document.getElementById('privacyConsent').checked){alert('개인정보 수집 및 이용에 동의해주세요.');return false}const name=document.getElementById('userName').value;const phone=document.getElementById('userPhone').value;const email=document.getElementById('userEmail').value;
-// 1. Google Apps Script (backup)
-fetch(GOOGLE_SCRIPT_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,phone,email,timestamp:new Date().toISOString()})}).catch(err=>console.log('Google Script submit logged'));
-// 2. Server DB (primary)
+// Server DB
 apiFetch('/api/applications',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,phone,email})}).then(r=>r.json()).then(d=>{if(d.success)console.log('Application saved:',d.application.id)}).catch(err=>console.log('Server submit error:',err));
-// 3. Show modal (reset state)
+// Show modal (reset state)
 document.getElementById('modalActiveContent').style.display='block';
 document.getElementById('timerExpired').style.display='none';
 document.getElementById('modalOverlay').classList.add('active');startTimer();return false}

@@ -55,19 +55,19 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
       const normalizedPhone = phone ? phone.replace(/[-\s]/g, '') : null;
       if (normalizedPhone) {
         appResult = await client.query(
-          "SELECT * FROM applications WHERE REPLACE(REPLACE(phone, '-', ''), ' ', '') = $1 AND status = 'pending' AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1",
+          "SELECT * FROM applications WHERE REPLACE(REPLACE(phone, '-', ''), ' ', '') = $1 AND status = 'pending' AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1 FOR UPDATE",
           [normalizedPhone]
         );
       }
       if ((!appResult || appResult.rows.length === 0) && email) {
         appResult = await client.query(
-          "SELECT * FROM applications WHERE email = $1 AND status = 'pending' AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1",
+          "SELECT * FROM applications WHERE email = $1 AND status = 'pending' AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1 FOR UPDATE",
           [email]
         );
       }
       if ((!appResult || appResult.rows.length === 0) && depositor_name) {
         appResult = await client.query(
-          "SELECT * FROM applications WHERE name = $1 AND status = 'pending' AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1",
+          "SELECT * FROM applications WHERE name = $1 AND status = 'pending' AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1 FOR UPDATE",
           [depositor_name]
         );
       }
@@ -588,9 +588,12 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
 
   app.post('/api/webhook/backup-to-github', requireDB, requireApiKey, async (req, res) => {
     try {
-      const { github_token, repo_owner, repo_name, branch } = req.body;
+      const github_token = CONFIG.BACKUP_GITHUB_TOKEN;
+      const repo_owner = CONFIG.BACKUP_GITHUB_OWNER;
+      const repo_name = CONFIG.BACKUP_GITHUB_REPO;
+      const branch = CONFIG.BACKUP_GITHUB_BRANCH || 'main';
       if (!github_token || !repo_owner || !repo_name) {
-        return res.status(400).json({ error: 'github_token, repo_owner, repo_name 필수' });
+        return res.status(400).json({ error: 'GitHub 백업 환경변수가 설정되지 않았습니다 (BACKUP_GITHUB_TOKEN, BACKUP_GITHUB_OWNER, BACKUP_GITHUB_REPO)' });
       }
 
       const pool = getPool();
@@ -629,30 +632,38 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
       // Check if file exists (to get SHA for update)
       let sha = null;
       try {
-        const checkResp = await fetch(`https://api.github.com/repos/${repo_owner}/${repo_name}/contents/${filePath}?ref=${branch || 'main'}`, {
-          headers: { 'Authorization': `token ${github_token}` }
+        const checkController = new AbortController();
+        const checkTimeoutId = setTimeout(() => checkController.abort(), 15000);
+        const checkResp = await fetch(`https://api.github.com/repos/${repo_owner}/${repo_name}/contents/${filePath}?ref=${branch}`, {
+          headers: { 'Authorization': `token ${github_token}` },
+          signal: checkController.signal
         });
+        clearTimeout(checkTimeoutId);
         if (checkResp.ok) {
           const existing = await checkResp.json();
           sha = existing.sha;
         }
-      } catch (e) { /* file doesn't exist yet */ }
+      } catch (e) { /* file doesn't exist yet or timeout */ }
 
       const payload = {
         message: `[자동백업] ${dateStr} DB 백업 (회원 ${users.rows.length}명, 결제 ${payments.rows.length}건)`,
         content: contentBase64,
-        branch: branch || 'main'
+        branch: branch
       };
       if (sha) payload.sha = sha;
 
+      const putController = new AbortController();
+      const putTimeoutId = setTimeout(() => putController.abort(), 15000);
       const ghResp = await fetch(`https://api.github.com/repos/${repo_owner}/${repo_name}/contents/${filePath}`, {
         method: 'PUT',
         headers: {
           'Authorization': `token ${github_token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        signal: putController.signal
       });
+      clearTimeout(putTimeoutId);
 
       const ghResult = await ghResp.json();
       res.json({

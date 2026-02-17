@@ -1,6 +1,17 @@
 module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, services }) {
   const { requireDB, requireAuth } = middleware;
 
+  // ===================== Helper: auto-expire passes =====================
+
+  async function autoExpirePasses(pool, passes) {
+    for (const pass of passes) {
+      if (pass.status === 'active' && pass.expires_at && new Date(pass.expires_at) < new Date()) {
+        await pool.query("UPDATE class_passes SET status = 'expired' WHERE id = $1", [pass.id]);
+        pass.status = 'expired';
+      }
+    }
+  }
+
   // ===================== MEMBER: mypage =====================
 
   app.get('/api/mypage', requireDB, requireAuth, async (req, res) => {
@@ -8,20 +19,15 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
     try {
       const userId = req.session.userId;
       const userResult = await pool.query('SELECT id, name, email, phone, password_is_temp, created_at FROM users WHERE id = $1 AND deleted_at IS NULL', [userId]);
-      const passResult = await pool.query('SELECT * FROM class_passes WHERE user_id = $1 ORDER BY purchased_at DESC', [userId]);
+      const passResult = await pool.query('SELECT * FROM class_passes WHERE user_id = $1 ORDER BY purchased_at DESC LIMIT 50', [userId]);
 
       // Auto-expire passes that have passed their expiration date
-      for (const pass of passResult.rows) {
-        if (pass.status === 'active' && pass.expires_at && new Date(pass.expires_at) < new Date()) {
-          await pool.query("UPDATE class_passes SET status = 'expired' WHERE id = $1", [pass.id]);
-          pass.status = 'expired';
-        }
-      }
+      await autoExpirePasses(pool, passResult.rows);
 
-      const paymentResult = await pool.query('SELECT * FROM payments WHERE user_id = $1 ORDER BY created_at DESC', [userId]);
+      const paymentResult = await pool.query('SELECT * FROM payments WHERE user_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 50', [userId]);
 
       const attendancePage = parseInt(req.query.attendance_page) || 1;
-      const attendanceLimit = 20;
+      const attendanceLimit = 50;
       const attendanceOffset = (attendancePage - 1) * attendanceLimit;
       const attendanceResult = await pool.query(
         'SELECT * FROM attendance WHERE user_id = $1 ORDER BY attended_at DESC LIMIT $2 OFFSET $3',
@@ -54,13 +60,13 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
       const userId = req.session.userId;
       const depositorName = req.body.depositor_name || req.session.userName;
 
-      // Check for existing pending payment
-      const existingPending = await pool.query(
-        "SELECT id FROM payments WHERE user_id = $1 AND status = 'pending' AND deleted_at IS NULL",
+      // Check for recent pending payment (duplicate prevention)
+      const recentPending = await pool.query(
+        "SELECT id FROM payments WHERE user_id = $1 AND status = 'pending' AND created_at > NOW() - INTERVAL '1 hour' AND deleted_at IS NULL",
         [userId]
       );
-      if (existingPending.rows.length > 0) {
-        return res.status(400).json({ error: '이미 입금 대기 중인 결제가 있습니다. 입금 후 자동 확인됩니다.' });
+      if (recentPending.rows.length > 0) {
+        return res.status(400).json({ error: '이미 입금 대기 중인 결제가 있습니다. 잠시 후 다시 시도해주세요.' });
       }
 
       const paymentResult = await pool.query(

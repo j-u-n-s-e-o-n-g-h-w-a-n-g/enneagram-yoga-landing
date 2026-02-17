@@ -23,7 +23,7 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
     try {
       const search = req.query.search || '';
       const page = parseInt(req.query.page) || 1;
-      const limit = parseInt(req.query.limit) || 20;
+      const limit = Math.min(parseInt(req.query.limit) || 20, 100);
       const offset = (page - 1) * limit;
 
       let whereClause = "WHERE u.role = 'member' AND u.deleted_at IS NULL";
@@ -62,7 +62,8 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
   app.get('/api/admin/members/:id', requireDB, requireAdmin, async (req, res) => {
     const pool = getPool();
     try {
-      const userId = req.params.id;
+      const userId = parseInt(req.params.id);
+      if (isNaN(userId)) return res.status(400).json({ error: '잘못된 요청입니다' });
       const userResult = await pool.query(
         'SELECT id, name, email, phone, password_is_temp, created_at FROM users WHERE id = $1 AND role = $2 AND deleted_at IS NULL',
         [userId, 'member']
@@ -100,7 +101,8 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
   app.put('/api/admin/members/:id', requireDB, requireAdmin, async (req, res) => {
     const pool = getPool();
     try {
-      const userId = req.params.id;
+      const userId = parseInt(req.params.id);
+      if (isNaN(userId)) return res.status(400).json({ error: '잘못된 요청입니다' });
       const { name, email, phone } = req.body;
       if (!name || !name.trim()) return res.status(400).json({ error: '이름을 입력해주세요' });
 
@@ -137,7 +139,8 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
   app.delete('/api/admin/members/:id', requireDB, requireAdmin, async (req, res) => {
     const pool = getPool();
     try {
-      const userId = req.params.id;
+      const userId = parseInt(req.params.id);
+      if (isNaN(userId)) return res.status(400).json({ error: '잘못된 요청입니다' });
       const userCheck = await pool.query('SELECT id, name FROM users WHERE id = $1 AND role = $2 AND deleted_at IS NULL', [userId, 'member']);
       if (userCheck.rows.length === 0) return res.status(404).json({ error: '회원을 찾을 수 없습니다' });
       const userName = userCheck.rows[0].name;
@@ -157,7 +160,8 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      const userId = req.params.id;
+      const userId = parseInt(req.params.id);
+      if (isNaN(userId)) { await client.query('ROLLBACK'); return res.status(400).json({ error: '잘못된 요청입니다' }); }
       const { credits, note } = req.body;
       const addCount = parseInt(credits);
       if (!addCount || addCount < 1 || addCount > 100) {
@@ -214,8 +218,9 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
   app.get('/api/admin/members/:id/attendance', requireDB, requireAdmin, async (req, res) => {
     const pool = getPool();
     try {
-      const userId = req.params.id;
-      const limit = parseInt(req.query.limit) || 50;
+      const userId = parseInt(req.params.id);
+      if (isNaN(userId)) return res.status(400).json({ error: '잘못된 요청입니다' });
+      const limit = Math.min(parseInt(req.query.limit) || 50, 100);
       const offset = parseInt(req.query.offset) || 0;
       const result = await pool.query(
         "SELECT a.id, a.attended_at, a.note, a.zoom_meeting_uuid, cp.total_classes, cp.remaining_classes as pass_remaining, cp.status as pass_status FROM attendance a LEFT JOIN class_passes cp ON a.class_pass_id = cp.id WHERE a.user_id = $1 ORDER BY a.attended_at DESC LIMIT $2 OFFSET $3",
@@ -237,7 +242,7 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
       const status = req.query.status || 'all';
       const search = req.query.search || '';
       const page = parseInt(req.query.page) || 1;
-      const limit = parseInt(req.query.limit) || 20;
+      const limit = Math.min(parseInt(req.query.limit) || 20, 100);
       const offset = (page - 1) * limit;
 
       let whereClause = ' WHERE p.deleted_at IS NULL';
@@ -282,7 +287,8 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      const paymentId = req.params.id;
+      const paymentId = parseInt(req.params.id);
+      if (isNaN(paymentId)) { await client.query('ROLLBACK'); return res.status(400).json({ error: '잘못된 요청입니다' }); }
       const payment = await client.query('SELECT * FROM payments WHERE id = $1', [paymentId]);
       if (payment.rows.length === 0) { await client.query('ROLLBACK'); return res.status(404).json({ error: '결제를 찾을 수 없습니다' }); }
       if (payment.rows[0].status === 'confirmed') { await client.query('ROLLBACK'); return res.status(400).json({ error: '이미 확인된 결제입니다' }); }
@@ -311,7 +317,8 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
   app.delete('/api/admin/payments/:id', requireDB, requireAdmin, async (req, res) => {
     const pool = getPool();
     try {
-      const paymentId = req.params.id;
+      const paymentId = parseInt(req.params.id);
+      if (isNaN(paymentId)) return res.status(400).json({ error: '잘못된 요청입니다' });
       const payment = await pool.query('SELECT * FROM payments WHERE id = $1 AND deleted_at IS NULL', [paymentId]);
       if (payment.rows.length === 0) { return res.status(404).json({ error: '결제를 찾을 수 없습니다' }); }
       // If payment was confirmed and has a class_pass, deactivate the pass
@@ -334,7 +341,8 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      const userId = req.params.id;
+      const userId = parseInt(req.params.id);
+      if (isNaN(userId)) { await client.query('ROLLBACK'); return res.status(400).json({ error: '잘못된 요청입니다' }); }
       const passResult = await client.query(
         "SELECT * FROM class_passes WHERE user_id = $1 AND status = 'active' AND remaining_classes > 0 AND (expires_at IS NULL OR expires_at > NOW()) ORDER BY purchased_at ASC LIMIT 1",
         [userId]
@@ -391,7 +399,7 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
       const status = req.query.status || 'all';
       const search = req.query.search || '';
       const page = parseInt(req.query.page) || 1;
-      const limit = parseInt(req.query.limit) || 20;
+      const limit = Math.min(parseInt(req.query.limit) || 20, 100);
       const offset = (page - 1) * limit;
 
       let whereClause = ' WHERE deleted_at IS NULL';
@@ -431,7 +439,8 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
   app.put('/api/admin/applications/:id', requireDB, requireAdmin, async (req, res) => {
     const pool = getPool();
     try {
-      const appId = req.params.id;
+      const appId = parseInt(req.params.id);
+      if (isNaN(appId)) return res.status(400).json({ error: '잘못된 요청입니다' });
       const { name, email, phone } = req.body;
       if (!name || !name.trim()) return res.status(400).json({ error: '이름을 입력해주세요' });
 
@@ -461,7 +470,8 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
   app.delete('/api/admin/applications/:id', requireDB, requireAdmin, async (req, res) => {
     const pool = getPool();
     try {
-      const appId = req.params.id;
+      const appId = parseInt(req.params.id);
+      if (isNaN(appId)) return res.status(400).json({ error: '잘못된 요청입니다' });
       const appCheck = await pool.query('SELECT id, name, status FROM applications WHERE id = $1 AND deleted_at IS NULL', [appId]);
       if (appCheck.rows.length === 0) return res.status(404).json({ error: '신청 내역을 찾을 수 없습니다' });
 
@@ -480,7 +490,8 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
   app.get('/api/admin/members/:id/notifications', requireDB, requireAdmin, async (req, res) => {
     const pool = getPool();
     try {
-      const userId = req.params.id;
+      const userId = parseInt(req.params.id);
+      if (isNaN(userId)) return res.status(400).json({ error: '잘못된 요청입니다' });
       const result = await pool.query(
         'SELECT nl.*, p.amount as payment_amount, p.depositor_name FROM notification_log nl LEFT JOIN payments p ON nl.payment_id = p.id WHERE nl.user_id = $1 ORDER BY nl.created_at DESC LIMIT 50',
         [userId]
@@ -497,7 +508,8 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
   app.post('/api/admin/members/:id/resend', requireDB, requireAdmin, async (req, res) => {
     const pool = getPool();
     try {
-      const userId = req.params.id;
+      const userId = parseInt(req.params.id);
+      if (isNaN(userId)) return res.status(400).json({ error: '잘못된 요청입니다' });
       const { type } = req.body;
       const userResult = await pool.query('SELECT * FROM users WHERE id = $1 AND deleted_at IS NULL', [userId]);
       if (userResult.rows.length === 0) return res.status(404).json({ error: '회원을 찾을 수 없습니다' });
@@ -506,14 +518,14 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
       const payment = payResult.rows[0] || null;
 
       if (type === 'sms') {
-        const msg = user.name + '님,\n[데일리 요가 클래스] 안내\n\n▶ 로그인: https://junseonghwang.com/login\n▶ 수업 시간: 평일 오전 9:30 / 오후 6:30\n\n* Zoom: https://us06web.zoom.us/j/87426930070?pwd=FFf88PQ1ZeyP8MJ1gCMqW6oaB35qqZ.1\n* 암호: yoga';
+        const msg = user.name + '님,\n[데일리 요가 클래스] 안내\n\n▶ 로그인: https://junseonghwang.com/login\n▶ 수업 시간: 평일 오전 9:30 / 오후 6:30\n\n* Zoom: ' + (CONFIG.ZOOM_MEETING_URL || 'https://junseonghwang.com') + '\n* 암호: ' + (CONFIG.ZOOM_PASSWORD || 'yoga');
         const { success, groupId } = await sendSMS(user.phone, msg);
         await logNotification(pool, userId, payment?.id, 'sms', success ? 'success' : 'failed', { groupId, manual: true });
         return res.json({ success, message: success ? 'SMS 재발송 성공' : 'SMS 재발송 실패' });
       }
 
       if (type === 'email') {
-        const html = '<div style="font-family:sans-serif;max-width:600px;margin:0 auto;line-height:1.8"><p><strong>' + user.name + '</strong>님,<br>[데일리 요가 클래스] 안내</p><ul style="list-style:none;padding:0"><li>▶ 로그인: <a href="https://junseonghwang.com/login">https://junseonghwang.com/login</a></li><li>▶ 수업 시간: 평일 오전 9:30 / 오후 6:30</li></ul><hr><ul style="list-style:none;padding:0"><li>Zoom: <a href="https://us06web.zoom.us/j/87426930070?pwd=FFf88PQ1ZeyP8MJ1gCMqW6oaB35qqZ.1">참여하기</a></li><li>Zoom 암호: yoga</li></ul></div>';
+        const html = '<div style="font-family:sans-serif;max-width:600px;margin:0 auto;line-height:1.8"><p><strong>' + user.name + '</strong>님,<br>[데일리 요가 클래스] 안내</p><ul style="list-style:none;padding:0"><li>▶ 로그인: <a href="https://junseonghwang.com/login">https://junseonghwang.com/login</a></li><li>▶ 수업 시간: 평일 오전 9:30 / 오후 6:30</li></ul><hr><ul style="list-style:none;padding:0"><li>Zoom: <a href="' + (CONFIG.ZOOM_MEETING_URL || 'https://junseonghwang.com') + '">참여하기</a></li><li>Zoom 암호: ' + (CONFIG.ZOOM_PASSWORD || 'yoga') + '</li></ul></div>';
         const { success, email_id } = await sendEmail(user.email, '[데일리 요가 클래스] 수업 안내', html);
         await logNotification(pool, userId, payment?.id, 'email', success ? 'success' : 'failed', { email_id, manual: true });
         return res.json({ success, message: success ? '이메일 재발송 성공' : '이메일 재발송 실패' });
@@ -624,26 +636,29 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
         return res.status(400).json({ error: '발송 대상이 없습니다' });
       }
 
-      // 순차 발송
+      // Send in batches of 5 for concurrency control
       let sent = 0;
       let failed = 0;
       const details = [];
 
-      for (const member of members) {
-        const personalMsg = message.replace(/\{name\}/g, member.name);
-        try {
+      const BATCH_SIZE = 5;
+      for (let i = 0; i < members.length; i += BATCH_SIZE) {
+        const batch = members.slice(i, i + BATCH_SIZE);
+        const results = await Promise.allSettled(batch.map(async (member) => {
+          const personalMsg = message.replace(/\{name\}/g, member.name);
           const { success, groupId } = await sendSMS(member.phone, personalMsg);
-          if (success) {
-            sent++;
-            details.push({ name: member.name, phone: member.phone, status: 'success' });
+          await logNotification(pool, member.id, null, 'sms', success ? 'success' : 'failed', { groupId, bulk: true, bulk_type: type });
+          return { name: member.name, phone: member.phone, status: success ? 'success' : 'failed' };
+        }));
+        for (const result of results) {
+          if (result.status === 'fulfilled') {
+            if (result.value.status === 'success') sent++;
+            else failed++;
+            details.push(result.value);
           } else {
             failed++;
-            details.push({ name: member.name, phone: member.phone, status: 'failed' });
+            details.push({ name: batch[results.indexOf(result)]?.name || 'unknown', phone: '', status: 'error' });
           }
-          await logNotification(pool, member.id, null, 'sms', success ? 'success' : 'failed', { groupId, bulk: true, bulk_type: type });
-        } catch (smsErr) {
-          failed++;
-          details.push({ name: member.name, phone: member.phone, status: 'error' });
         }
       }
 

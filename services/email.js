@@ -4,14 +4,24 @@ module.exports = function(CONFIG) {
     if (html) emailPayload.html = html;
     if (text) emailPayload.text = text;
     if (attachments && Array.isArray(attachments)) emailPayload.attachments = attachments;
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${CONFIG.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(emailPayload)
-    });
-    const result = await response.json();
-    const success = !!result.id;
-    return { success, email_id: result.id, result };
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    try {
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${CONFIG.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(emailPayload),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      const result = await response.json();
+      const success = !!result.id;
+      return { success, email_id: result.id, result };
+    } catch (err) {
+      clearTimeout(timeoutId);
+      console.error('Email send error:', err.message);
+      return { success: false, error: err.message };
+    }
   }
 
   return { sendEmail };

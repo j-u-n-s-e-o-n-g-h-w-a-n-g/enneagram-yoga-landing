@@ -27,6 +27,12 @@ const CONFIG = {
   POPBILL_SECRET_KEY: process.env.POPBILL_SECRET_KEY || '',
   POPBILL_CORP_NUM: process.env.POPBILL_CORP_NUM || '',
   DISCORD_WEBHOOK_URL: process.env.DISCORD_WEBHOOK_URL || '',
+  ZOOM_MEETING_URL: process.env.ZOOM_MEETING_URL || '',
+  ZOOM_PASSWORD: process.env.ZOOM_PASSWORD || 'yoga',
+  BACKUP_GITHUB_TOKEN: process.env.BACKUP_GITHUB_TOKEN || '',
+  BACKUP_GITHUB_OWNER: process.env.BACKUP_GITHUB_OWNER || '',
+  BACKUP_GITHUB_REPO: process.env.BACKUP_GITHUB_REPO || '',
+  BACKUP_GITHUB_BRANCH: process.env.BACKUP_GITHUB_BRANCH || 'main',
 };
 
 // ===================== 서비스 초기화 =====================
@@ -60,6 +66,7 @@ app.use((req, res, next) => {
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'");
   next();
 });
 
@@ -119,6 +126,7 @@ app.use('/api/reset-password', requireCsrf);
 app.use('/api/applications', requireCsrf);
 app.use('/api/members', requireCsrf);
 app.use('/api/admin', requireCsrf);
+app.use('/api/passes', requireCsrf);
 
 // ===================== Rate Limiter =====================
 const appRateLimiter = (() => {
@@ -157,9 +165,13 @@ app.post('/api/applications', middleware.requireDB, appRateLimiter, async (req, 
   try {
     const { name, email, phone } = req.body;
     if (!name || !email || !phone) return res.status(400).json({ error: '이름, 이메일, 전화번호를 모두 입력해주세요' });
+    if (name.length > 50) return res.status(400).json({ error: '이름은 50자 이하로 입력해주세요' });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: '올바른 이메일 형식이 아닙니다' });
+    const normalizedPhone = phone.replace(/[-\s]/g, '');
+    if (!/^01[016789]\d{7,8}$/.test(normalizedPhone)) return res.status(400).json({ error: '올바른 전화번호 형식이 아닙니다' });
     // 동일 이메일+pending이면 업데이트
     const existing = await pool.query(
-      "SELECT id FROM applications WHERE email = $1 AND status = 'pending'",
+      "SELECT id FROM applications WHERE email = $1 AND status = 'pending' AND deleted_at IS NULL",
       [email]
     );
     let application;
@@ -213,6 +225,11 @@ async function start() {
   });
   process.on('SIGTERM', () => {
     console.log('SIGTERM received, shutting down...');
+    server.close(() => { const p = getPool(); if (p) p.end(); process.exit(0); });
+    setTimeout(() => process.exit(1), 10000);
+  });
+  process.on('SIGINT', () => {
+    console.log('SIGINT received, shutting down...');
     server.close(() => { const p = getPool(); if (p) p.end(); process.exit(0); });
     setTimeout(() => process.exit(1), 10000);
   });

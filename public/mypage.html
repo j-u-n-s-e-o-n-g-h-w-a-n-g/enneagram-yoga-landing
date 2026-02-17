@@ -130,6 +130,7 @@ footer p{font-size:0.7rem;color:#999;font-weight:300}
 let csrfToken='';
 fetch('/api/csrf-token').then(r=>r.json()).then(d=>{csrfToken=d.csrfToken}).catch(()=>{});
 function apiFetch(url,opts={}){if(!opts.headers)opts.headers={};opts.headers['Content-Type']=opts.headers['Content-Type']||'application/json';if(csrfToken)opts.headers['X-CSRF-Token']=csrfToken;return fetch(url,opts);}
+function escapeHtml(str){if(!str)return '';return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');}
 async function checkAuth() {
   const res = await fetch('/api/me');
   const data = await res.json();
@@ -192,7 +193,7 @@ async function loadMypage() {
         var statusBadge = '';
         if (p.status === 'active') statusBadge = '<span class="badge badge-active">사용중</span>';
         else if (p.status === 'used') statusBadge = '<span class="badge badge-used">사용완료</span>';
-        else statusBadge = '<span class="badge badge-used">' + p.status + '</span>';
+        else statusBadge = '<span class="badge badge-used">' + escapeHtml(p.status) + '</span>';
 
         var expiryCell = '-';
         if (p.expires_at) {
@@ -234,7 +235,7 @@ async function loadMypage() {
       var aHtml = '<table><thead><tr><th>Date</th><th>Note</th></tr></thead><tbody>';
       data.attendance.forEach(function(a) {
         var date = new Date(a.attended_at).toLocaleDateString('ko-KR', { year:'numeric', month:'long', day:'numeric', weekday:'short' });
-        aHtml += '<tr><td>' + date + '</td><td>' + (a.note || '-') + '</td></tr>';
+        aHtml += '<tr><td>' + date + '</td><td>' + escapeHtml(a.note || '-') + '</td></tr>';
       });
       aHtml += '</tbody></table>';
       document.getElementById('attendanceList').innerHTML = aHtml;
@@ -292,6 +293,16 @@ async function logout() {
 }
 function toggleMenu(){document.querySelector('nav ul').classList.toggle('open');}
 checkAuth();
+fetch('/api/config').then(r=>r.json()).then(cfg=>{
+  var priceText=document.querySelector('#passListSection p');
+  if(priceText&&cfg.pass_classes&&cfg.pass_price){
+    priceText.textContent=cfg.pass_classes+'회 이용권 ('+cfg.pass_price.toLocaleString()+'원)을 구매하시려면 아래 버튼을 눌러주세요.';
+  }
+  var bankBox=document.getElementById('bankInfo');
+  if(bankBox&&cfg.bank_name){
+    bankBox.innerHTML='<strong>입금 계좌</strong><br>'+escapeHtml(cfg.bank_name)+' '+escapeHtml(cfg.bank_account)+'<br><strong>예금주</strong> '+escapeHtml(cfg.bank_holder)+'<br><strong>금액</strong> '+cfg.pass_price.toLocaleString()+'원<br><br>입금 확인 후 이용권이 자동으로 활성화됩니다.';
+  }
+}).catch(()=>{});
 </script>
 </body>
 </html>
