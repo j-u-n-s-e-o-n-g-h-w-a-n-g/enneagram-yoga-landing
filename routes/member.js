@@ -127,6 +127,63 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
     }
   });
 
+  // ===================== WEBHOOK: cleanup expired Zoom registrants =====================
+
+  app.post('/api/webhook/zoom-cleanup', requireDB, middleware.requireApiKey, async (req, res) => {
+    const pool = getPool();
+    try {
+      // Find users whose passes are all expired/used (no active pass)
+      const expiredUsers = await pool.query(`
+        SELECT DISTINCT u.id, u.email, u.name FROM users u
+        WHERE u.role = 'member' AND u.deleted_at IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM class_passes cp
+            WHERE cp.user_id = u.id AND cp.status = 'active' AND cp.remaining_classes > 0 AND cp.expires_at > NOW()
+          )
+          AND EXISTS (
+            SELECT 1 FROM class_passes cp2 WHERE cp2.user_id = u.id
+          )
+      `);
+
+      if (expiredUsers.rows.length === 0) {
+        return res.json({ success: true, message: 'No expired registrants to clean up', removed: 0 });
+      }
+
+      const accessToken = await getZoomAccessToken();
+      const meetingId = CONFIG.ZOOM_MEETING_ID;
+
+      // Get all current registrants
+      const listRes = await fetch(`https://api.zoom.us/v2/meetings/${meetingId}/registrants?status=approved&page_size=300`, {
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+      });
+      if (!listRes.ok) {
+        return res.status(500).json({ error: 'Failed to fetch Zoom registrants' });
+      }
+      const listData = await listRes.json();
+      const registrants = listData.registrants || [];
+
+      let removed = 0;
+      for (const user of expiredUsers.rows) {
+        const reg = registrants.find(r => r.email.toLowerCase() === user.email.toLowerCase());
+        if (reg) {
+          const delRes = await fetch(`https://api.zoom.us/v2/meetings/${meetingId}/registrants/${reg.id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+          });
+          if (delRes.ok || delRes.status === 204) {
+            removed++;
+            console.log(`Zoom registrant removed: ${user.name} (${user.email})`);
+          }
+        }
+      }
+
+      res.json({ success: true, checked: expiredUsers.rows.length, removed });
+    } catch (err) {
+      console.error('Zoom cleanup error:', err);
+      res.status(500).json({ error: 'Zoom 정리 중 오류' });
+    }
+  });
+
   // ===================== MEMBER: passes/request =====================
 
   app.post('/api/passes/request', requireDB, requireAuth, async (req, res) => {

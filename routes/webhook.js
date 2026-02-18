@@ -17,6 +17,94 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
     return null;
   }
 
+  // ===================== payment-confirm helpers =====================
+
+  async function findMatchingApplication(client, { depositor_name, phone, email }) {
+    const normalizedPhone = phone ? phone.replace(/[-\s]/g, '') : null;
+    let appResult;
+    if (normalizedPhone) {
+      appResult = await client.query(
+        "SELECT * FROM applications WHERE REPLACE(REPLACE(phone, '-', ''), ' ', '') = $1 AND status = 'pending' AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1 FOR UPDATE",
+        [normalizedPhone]
+      );
+    }
+    if ((!appResult || appResult.rows.length === 0) && email) {
+      appResult = await client.query(
+        "SELECT * FROM applications WHERE email = $1 AND status = 'pending' AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1 FOR UPDATE",
+        [email]
+      );
+    }
+    if ((!appResult || appResult.rows.length === 0) && depositor_name) {
+      appResult = await client.query(
+        "SELECT * FROM applications WHERE name = $1 AND status = 'pending' AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1 FOR UPDATE",
+        [depositor_name]
+      );
+    }
+    return appResult && appResult.rows.length > 0 ? appResult.rows[0] : null;
+  }
+
+  async function handleUnderpaid(client, { application, paidAmount, expectedAmount, depositor_name, transaction_id }) {
+    const existingUserForCheck = await client.query('SELECT id FROM users WHERE email = $1 AND deleted_at IS NULL LIMIT 1', [application.email]);
+    const existingUserId = existingUserForCheck.rows.length > 0 ? existingUserForCheck.rows[0].id : null;
+    const depName = depositor_name || application.name;
+
+    let previousTotal = 0;
+    if (existingUserId) {
+      const prevPayments = await client.query(
+        "SELECT COALESCE(SUM(amount), 0) as total_prev FROM payments WHERE user_id = $1 AND status = 'underpaid' AND confirmed_at >= NOW() - INTERVAL '24 hours'",
+        [existingUserId]
+      );
+      previousTotal = parseInt(prevPayments.rows[0].total_prev) || 0;
+    } else {
+      const prevPayments = await client.query(
+        "SELECT COALESCE(SUM(amount), 0) as total_prev FROM payments WHERE user_id IS NULL AND depositor_name = $1 AND status = 'underpaid' AND confirmed_at >= NOW() - INTERVAL '24 hours'",
+        [depName]
+      );
+      previousTotal = parseInt(prevPayments.rows[0].total_prev) || 0;
+    }
+    const totalPaid = previousTotal + paidAmount;
+
+    if (totalPaid >= expectedAmount) {
+      const whereClause = existingUserId
+        ? ["user_id = $1", [existingUserId]]
+        : ["user_id IS NULL AND depositor_name = $1", [depName]];
+      await client.query(
+        `UPDATE payments SET status = 'confirmed', confirmed_at = NOW() WHERE ${whereClause[0]} AND status = 'underpaid' AND confirmed_at >= NOW() - INTERVAL '24 hours'`,
+        whereClause[1]
+      );
+      return { completed: true, totalPaid };
+    }
+
+    // Still underpaid - record partial payment
+    const shortage = expectedAmount - totalPaid;
+    if (existingUserId) {
+      await client.query(
+        "INSERT INTO payments (user_id, amount, depositor_name, status, confirmed_at, transaction_id) VALUES ($1, $2, $3, 'underpaid', NOW(), $4)",
+        [existingUserId, paidAmount, depName, transaction_id || null]
+      );
+    } else {
+      await client.query(
+        "INSERT INTO payments (user_id, amount, depositor_name, status, confirmed_at, transaction_id) VALUES (NULL, $1, $2, 'underpaid', NOW(), $3)",
+        [paidAmount, depName, transaction_id || null]
+      );
+    }
+    return { completed: false, totalPaid, shortage };
+  }
+
+  async function createOrGetUser(client, application) {
+    const existingUser = await client.query('SELECT id, email FROM users WHERE email = $1 AND deleted_at IS NULL', [application.email]);
+    if (existingUser.rows.length > 0) {
+      return { userId: existingUser.rows[0].id, isNewUser: false, tempPassword: null };
+    }
+    const tempPassword = generateTempPassword();
+    const hashed = await bcrypt.hash(tempPassword, 10);
+    const newUser = await client.query(
+      'INSERT INTO users (name, email, phone, password, password_is_temp) VALUES ($1, $2, $3, $4, TRUE) RETURNING id',
+      [application.name, application.email, application.phone, hashed]
+    );
+    return { userId: newUser.rows[0].id, isNewUser: true, tempPassword };
+  }
+
   // ===================== WEBHOOK: payment-confirm =====================
 
   app.post('/api/webhook/payment-confirm', requireDB, requireApiKey, async (req, res) => {
@@ -30,20 +118,12 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
         return res.status(400).json({ error: '입금자명, 전화번호, 이메일 중 하나 이상 필요합니다' });
       }
 
-      // ===== 멱등성 체크: transaction_id가 있으면 중복 확인 =====
+      // ===== 멱등성 체크 =====
       if (transaction_id) {
-        const dupCheck = await client.query(
-          "SELECT id FROM payments WHERE transaction_id = $1",
-          [transaction_id]
-        );
+        const dupCheck = await client.query("SELECT id FROM payments WHERE transaction_id = $1", [transaction_id]);
         if (dupCheck.rows.length > 0) {
           await client.query('ROLLBACK');
-          return res.json({
-            success: true,
-            status: 'duplicate',
-            message: '이미 처리된 입금건입니다',
-            payment_id: dupCheck.rows[0].id
-          });
+          return res.json({ success: true, status: 'duplicate', message: '이미 처리된 입금건입니다', payment_id: dupCheck.rows[0].id });
         }
       }
 
@@ -51,113 +131,29 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
       const expectedAmount = CONFIG.PASS_PRICE;
 
       // 1. Find matching application
-      let appResult;
-      const normalizedPhone = phone ? phone.replace(/[-\s]/g, '') : null;
-      if (normalizedPhone) {
-        appResult = await client.query(
-          "SELECT * FROM applications WHERE REPLACE(REPLACE(phone, '-', ''), ' ', '') = $1 AND status = 'pending' AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1 FOR UPDATE",
-          [normalizedPhone]
-        );
-      }
-      if ((!appResult || appResult.rows.length === 0) && email) {
-        appResult = await client.query(
-          "SELECT * FROM applications WHERE email = $1 AND status = 'pending' AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1 FOR UPDATE",
-          [email]
-        );
-      }
-      if ((!appResult || appResult.rows.length === 0) && depositor_name) {
-        appResult = await client.query(
-          "SELECT * FROM applications WHERE name = $1 AND status = 'pending' AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1 FOR UPDATE",
-          [depositor_name]
-        );
-      }
-      if (!appResult || appResult.rows.length === 0) {
+      const application = await findMatchingApplication(client, { depositor_name, phone, email });
+      if (!application) {
         await client.query('ROLLBACK');
         return res.status(404).json({ success: false, status: 'not_found', error: '매칭되는 신청 내역을 찾을 수 없습니다', depositor_name, phone, email });
       }
 
-      const application = appResult.rows[0];
-
-      // 2. Check amount - underpaid (24시간 이내 부분입금만 합산)
+      // 2. Handle underpaid
       if (paidAmount > 0 && paidAmount < expectedAmount) {
-        const existingUserForCheck = await client.query('SELECT id FROM users WHERE email = $1 AND deleted_at IS NULL LIMIT 1', [application.email]);
-        const existingUserId = existingUserForCheck.rows.length > 0 ? existingUserForCheck.rows[0].id : null;
-
-        let previousTotal = 0;
-        if (existingUserId) {
-          const prevPayments = await client.query(
-            "SELECT COALESCE(SUM(amount), 0) as total_prev FROM payments WHERE user_id = $1 AND status = 'underpaid' AND confirmed_at >= NOW() - INTERVAL '24 hours'",
-            [existingUserId]
-          );
-          previousTotal = parseInt(prevPayments.rows[0].total_prev) || 0;
-        } else {
-          const prevPayments = await client.query(
-            "SELECT COALESCE(SUM(amount), 0) as total_prev FROM payments WHERE user_id IS NULL AND depositor_name = $1 AND status = 'underpaid' AND confirmed_at >= NOW() - INTERVAL '24 hours'",
-            [depositor_name || application.name]
-          );
-          previousTotal = parseInt(prevPayments.rows[0].total_prev) || 0;
-        }
-        const totalPaid = previousTotal + paidAmount;
-
-        if (totalPaid >= expectedAmount) {
-          if (existingUserId) {
-            await client.query(
-              "UPDATE payments SET status = 'confirmed', confirmed_at = NOW() WHERE user_id = $1 AND status = 'underpaid' AND confirmed_at >= NOW() - INTERVAL '24 hours'",
-              [existingUserId]
-            );
-          } else {
-            await client.query(
-              "UPDATE payments SET status = 'confirmed', confirmed_at = NOW() WHERE user_id IS NULL AND depositor_name = $1 AND status = 'underpaid' AND confirmed_at >= NOW() - INTERVAL '24 hours'",
-              [depositor_name || application.name]
-            );
-          }
-          paidAmount = totalPaid;
-        } else {
-          const shortage = expectedAmount - totalPaid;
-          if (existingUserId) {
-            await client.query(
-              "INSERT INTO payments (user_id, amount, depositor_name, status, confirmed_at, transaction_id) VALUES ($1, $2, $3, 'underpaid', NOW(), $4)",
-              [existingUserId, paidAmount, depositor_name || application.name, transaction_id || null]
-            );
-          } else {
-            await client.query(
-              "INSERT INTO payments (user_id, amount, depositor_name, status, confirmed_at, transaction_id) VALUES (NULL, $1, $2, 'underpaid', NOW(), $3)",
-              [paidAmount, depositor_name || application.name, transaction_id || null]
-            );
-          }
+        const underpaidResult = await handleUnderpaid(client, { application, paidAmount, expectedAmount, depositor_name, transaction_id });
+        if (!underpaidResult.completed) {
           await client.query('COMMIT');
           return res.json({
-            success: false,
-            status: 'underpaid',
-            paid_amount: totalPaid,
-            expected_amount: expectedAmount,
-            shortage: shortage,
-            user_name: application.name,
-            user_phone: application.phone,
-            message: '총 ' + totalPaid.toLocaleString() + '원이 입금되어 ' + shortage.toLocaleString() + '원이 부족합니다. ' + CONFIG.BANK_NAME + ' ' + CONFIG.BANK_ACCOUNT + ' (' + CONFIG.BANK_HOLDER + ') 계좌로 차액을 추가 입금해주세요.'
+            success: false, status: 'underpaid',
+            paid_amount: underpaidResult.totalPaid, expected_amount: expectedAmount, shortage: underpaidResult.shortage,
+            user_name: application.name, user_phone: application.phone,
+            message: '총 ' + underpaidResult.totalPaid.toLocaleString() + '원이 입금되어 ' + underpaidResult.shortage.toLocaleString() + '원이 부족합니다. ' + CONFIG.BANK_NAME + ' ' + CONFIG.BANK_ACCOUNT + ' (' + CONFIG.BANK_HOLDER + ') 계좌로 차액을 추가 입금해주세요.'
           });
         }
+        paidAmount = underpaidResult.totalPaid;
       }
 
-      // 3. Check for existing user
-      let userId;
-      let isNewUser = false;
-      let tempPassword = null;
-      const existingUser = await client.query('SELECT id, email FROM users WHERE email = $1 AND deleted_at IS NULL', [application.email]);
-
-      if (existingUser.rows.length > 0) {
-        userId = existingUser.rows[0].id;
-        isNewUser = false;
-      } else {
-        tempPassword = generateTempPassword();
-        const hashed = await bcrypt.hash(tempPassword, 10);
-        const newUser = await client.query(
-          'INSERT INTO users (name, email, phone, password, password_is_temp) VALUES ($1, $2, $3, $4, TRUE) RETURNING id',
-          [application.name, application.email, application.phone, hashed]
-        );
-        userId = newUser.rows[0].id;
-        isNewUser = true;
-      }
+      // 3. Create or get user
+      const { userId, isNewUser, tempPassword } = await createOrGetUser(client, application);
 
       // 4. Create class pass
       const passResult = await client.query(
@@ -173,17 +169,11 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
       const paymentId = paymentInsert.rows[0].id;
 
       // 6. Update application
-      await client.query(
-        "UPDATE applications SET status = 'paid', user_id = $1, paid_at = NOW() WHERE id = $2",
-        [userId, application.id]
-      );
+      await client.query("UPDATE applications SET status = 'paid', user_id = $1, paid_at = NOW() WHERE id = $2", [userId, application.id]);
 
-      // 7. Update NULL user_id underpaid records to point to user
+      // 7. Link orphan underpaid records to user
       if (isNewUser) {
-        await client.query(
-          "UPDATE payments SET user_id = $1 WHERE user_id IS NULL AND depositor_name = $2",
-          [userId, depositor_name || application.name]
-        );
+        await client.query("UPDATE payments SET user_id = $1 WHERE user_id IS NULL AND depositor_name = $2", [userId, depositor_name || application.name]);
       }
 
       await client.query('COMMIT');
@@ -192,28 +182,16 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
       let overpaidInfo = null;
       if (paidAmount > expectedAmount) {
         const excess = paidAmount - expectedAmount;
-        overpaidInfo = {
-          status: 'overpaid',
-          excess: excess,
-          message: paidAmount.toLocaleString() + '원이 입금되어 ' + excess.toLocaleString() + '원이 초과 입금되었습니다. 차액은 입금하신 계좌로 반환될 예정입니다.'
-        };
+        overpaidInfo = { status: 'overpaid', excess, message: paidAmount.toLocaleString() + '원이 입금되어 ' + excess.toLocaleString() + '원이 초과 입금되었습니다. 차액은 입금하신 계좌로 반환될 예정입니다.' };
       }
 
       res.json({
-        success: true,
-        status: overpaidInfo ? 'overpaid' : 'confirmed',
-        application_created_at: application.created_at,
-        user_id: userId,
-        payment_id: paymentId,
-        temp_password: tempPassword,
-        user_name: application.name,
-        user_email: application.email,
-        user_phone: application.phone,
-        is_new_user: isNewUser,
-        pass_id: passResult.rows[0].id,
-        expires_at: passResult.rows[0].expires_at,
-        paid_amount: paidAmount || expectedAmount,
-        overpaid: overpaidInfo
+        success: true, status: overpaidInfo ? 'overpaid' : 'confirmed',
+        application_created_at: application.created_at, user_id: userId, payment_id: paymentId,
+        temp_password: tempPassword, user_name: application.name, user_email: application.email,
+        user_phone: application.phone, is_new_user: isNewUser,
+        pass_id: passResult.rows[0].id, expires_at: passResult.rows[0].expires_at,
+        paid_amount: paidAmount || expectedAmount, overpaid: overpaidInfo
       });
     } catch (err) {
       await client.query('ROLLBACK');
@@ -459,7 +437,14 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
       const cleanPhone = phone.replace(/[-\s]/g, '');
       if (cleanPhone.length < 10) return res.status(400).json({ error: '유효하지 않은 전화번호' });
 
-      const { success, groupId, statusCode, result } = await sendSMS(phone, message);
+      // Send SMS with retry (1 retry on failure)
+      let smsResult = await sendSMS(phone, message);
+      if (!smsResult.success) {
+        console.warn('SMS first attempt failed, retrying in 2s...', { phone: cleanPhone, statusCode: smsResult.statusCode });
+        await new Promise(r => setTimeout(r, 2000));
+        smsResult = await sendSMS(phone, message);
+      }
+      const { success, groupId, statusCode, result } = smsResult;
 
       // Log to specific table if specified
       if (success && log_table && user_id) {
