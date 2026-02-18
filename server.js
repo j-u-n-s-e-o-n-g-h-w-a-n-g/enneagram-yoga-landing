@@ -117,7 +117,7 @@ const initPool = getPool();
 if (initPool) {
   try {
     const pgSession = require('connect-pg-simple')(session);
-    sessionConfig.store = new pgSession({ pool: initPool, tableName: 'session' });
+    sessionConfig.store = new pgSession({ pool: initPool, tableName: 'session', pruneSessionInterval: 3600 });
     console.log('✅ Session store: PostgreSQL');
   } catch (err) {
     console.warn('⚠️  PG session store failed, using memory store:', err.message);
@@ -159,17 +159,22 @@ app.use('/api/admin', requireCsrf);
 app.use('/api/passes', requireCsrf);
 app.use('/api/zoom-register', requireCsrf);
 
-// ===================== Rate Limiter =====================
+// ===================== Rate Limiter (sliding window) =====================
 const appRateLimiter = (() => {
-  const attempts = new Map();
-  setInterval(() => { const now = Date.now(); for (const [k,v] of attempts) { if (now - v.t > 3600000) attempts.delete(k); } }, 600000).unref();
+  const windows = new Map();
+  const WINDOW_MS = 15 * 60 * 1000; // 15분
+  const MAX_REQUESTS = 15;
+  setInterval(() => { const now = Date.now(); for (const [k,v] of windows) { const valid = v.filter(t => now - t < WINDOW_MS); if (valid.length === 0) windows.delete(k); else windows.set(k, valid); } }, 300000).unref();
   return (req, res, next) => {
     const ip = req.ip;
     const now = Date.now();
-    const r = attempts.get(ip);
-    if (!r || now - r.t > 3600000) { attempts.set(ip, { c: 1, t: now }); return next(); }
-    if (r.c >= 10) return res.status(429).json({ error: '너무 많은 요청입니다.' });
-    r.c++; next();
+    const timestamps = (windows.get(ip) || []).filter(t => now - t < WINDOW_MS);
+    if (timestamps.length >= MAX_REQUESTS) {
+      return res.status(429).json({ error: '너무 많은 요청입니다. 잠시 후 다시 시도해주세요.' });
+    }
+    timestamps.push(now);
+    windows.set(ip, timestamps);
+    next();
   };
 })();
 
@@ -194,7 +199,7 @@ app.get('/api/config', (req, res) => {
 app.post('/api/applications', middleware.requireDB, appRateLimiter, async (req, res) => {
   const pool = getPool();
   try {
-    const { name, email, phone } = req.body;
+    const { name, email, phone, consents } = req.body;
     if (!name || !email || !phone) return res.status(400).json({ error: '이름, 이메일, 전화번호를 모두 입력해주세요' });
     if (name.length > 50) return res.status(400).json({ error: '이름은 50자 이하로 입력해주세요' });
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: '올바른 이메일 형식이 아닙니다' });
@@ -218,6 +223,19 @@ app.post('/api/applications', middleware.requireDB, appRateLimiter, async (req, 
         [name, email, phone]
       );
       application = result.rows[0];
+    }
+    // 동의 내역 기록
+    if (consents && Array.isArray(consents)) {
+      const ip = req.ip || req.headers['x-forwarded-for'] || '';
+      const ua = req.headers['user-agent'] || '';
+      for (const c of consents) {
+        try {
+          await pool.query(
+            'INSERT INTO consent_log (application_id, consent_type, consented, ip_address, user_agent) VALUES ($1, $2, $3, $4, $5)',
+            [application.id, c.type, c.agreed !== false, ip, ua]
+          );
+        } catch (logErr) { console.error('Consent log error:', logErr.message); }
+      }
     }
     res.json({ success: true, application });
   } catch (err) {

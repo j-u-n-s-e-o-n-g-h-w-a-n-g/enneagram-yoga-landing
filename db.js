@@ -17,7 +17,7 @@ if (DB_URL) {
   pool = new Pool({
     connectionString: DB_URL,
     ssl: { rejectUnauthorized: false },
-    max: 10,
+    max: 5,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 5000
   });
@@ -182,6 +182,32 @@ async function initDB() {
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_audit_log_admin ON audit_log (admin_id);`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log (action);`);
+    // Webhook raw log (원본 입금 데이터 보존)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS webhook_raw_log (
+        id SERIAL PRIMARY KEY,
+        source VARCHAR(50) NOT NULL,
+        payload JSONB NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_webhook_raw_log_source ON webhook_raw_log (source);`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_webhook_raw_log_created ON webhook_raw_log (created_at);`);
+    // Application consent log (신청 시 동의 내역)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS consent_log (
+        id SERIAL PRIMARY KEY,
+        application_id INTEGER REFERENCES applications(id) ON DELETE SET NULL,
+        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        consent_type VARCHAR(50) NOT NULL,
+        consented BOOLEAN NOT NULL DEFAULT TRUE,
+        ip_address VARCHAR(45),
+        user_agent TEXT,
+        consented_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_consent_log_application ON consent_log (application_id);`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_consent_log_user ON consent_log (user_id);`);
     // Soft delete columns
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;`);
     await client.query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;`);

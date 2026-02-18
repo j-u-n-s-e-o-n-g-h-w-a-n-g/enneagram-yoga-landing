@@ -1,4 +1,4 @@
-module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, services }) {
+module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, services, getZoomAccessToken }) {
   const { requireDB, requireApiKey } = middleware;
   const { sendSMS } = services.sms;
   const { sendEmail } = services.email;
@@ -111,6 +111,9 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
     const pool = getPool();
     const client = await pool.connect();
     try {
+      // 원본 webhook 데이터 보존 (트랜잭션 밖에서)
+      try { await pool.query("INSERT INTO webhook_raw_log (source, payload) VALUES ('payment-confirm', $1)", [JSON.stringify(req.body)]); } catch(e) { console.error('Raw log error:', e.message); }
+
       await client.query('BEGIN');
       const { depositor_name, amount, phone, email, transaction_id } = req.body;
       if (!depositor_name && !phone && !email) {
@@ -544,6 +547,11 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
       const classPasses = await pool.query('SELECT * FROM class_passes ORDER BY id');
       const payments = await pool.query('SELECT * FROM payments ORDER BY id');
       const attendance = await pool.query('SELECT * FROM attendance ORDER BY id');
+      const journalingSmsLog = await pool.query('SELECT * FROM journaling_sms_log ORDER BY id');
+      const careSmsLog = await pool.query('SELECT * FROM care_sms_log ORDER BY id');
+      const creditLogs = await pool.query('SELECT * FROM credit_logs ORDER BY id');
+      const notificationLog = await pool.query('SELECT * FROM notification_log ORDER BY id');
+      const auditLog = await pool.query('SELECT * FROM audit_log ORDER BY id');
 
       res.json({
         success: true,
@@ -553,14 +561,24 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
           applications: applications.rows,
           class_passes: classPasses.rows,
           payments: payments.rows,
-          attendance: attendance.rows
+          attendance: attendance.rows,
+          journaling_sms_log: journalingSmsLog.rows,
+          care_sms_log: careSmsLog.rows,
+          credit_logs: creditLogs.rows,
+          notification_log: notificationLog.rows,
+          audit_log: auditLog.rows
         },
         counts: {
           users: users.rows.length,
           applications: applications.rows.length,
           class_passes: classPasses.rows.length,
           payments: payments.rows.length,
-          attendance: attendance.rows.length
+          attendance: attendance.rows.length,
+          journaling_sms_log: journalingSmsLog.rows.length,
+          care_sms_log: careSmsLog.rows.length,
+          credit_logs: creditLogs.rows.length,
+          notification_log: notificationLog.rows.length,
+          audit_log: auditLog.rows.length
         }
       });
     } catch (err) {
@@ -592,6 +610,11 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
       const classPasses = await pool.query('SELECT * FROM class_passes ORDER BY id');
       const payments = await pool.query('SELECT * FROM payments ORDER BY id');
       const attendance = await pool.query('SELECT * FROM attendance ORDER BY id');
+      const journalingSmsLog = await pool.query('SELECT * FROM journaling_sms_log ORDER BY id');
+      const careSmsLog = await pool.query('SELECT * FROM care_sms_log ORDER BY id');
+      const creditLogs = await pool.query('SELECT * FROM credit_logs ORDER BY id');
+      const notificationLog = await pool.query('SELECT * FROM notification_log ORDER BY id');
+      const auditLog = await pool.query('SELECT * FROM audit_log ORDER BY id');
 
       const backupData = {
         backup_date: now.toISOString(),
@@ -600,14 +623,24 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
           applications: applications.rows.length,
           class_passes: classPasses.rows.length,
           payments: payments.rows.length,
-          attendance: attendance.rows.length
+          attendance: attendance.rows.length,
+          journaling_sms_log: journalingSmsLog.rows.length,
+          care_sms_log: careSmsLog.rows.length,
+          credit_logs: creditLogs.rows.length,
+          notification_log: notificationLog.rows.length,
+          audit_log: auditLog.rows.length
         },
         data: {
           users: users.rows,
           applications: applications.rows,
           class_passes: classPasses.rows,
           payments: payments.rows,
-          attendance: attendance.rows
+          attendance: attendance.rows,
+          journaling_sms_log: journalingSmsLog.rows,
+          care_sms_log: careSmsLog.rows,
+          credit_logs: creditLogs.rows,
+          notification_log: notificationLog.rows,
+          audit_log: auditLog.rows
         }
       };
 
@@ -693,6 +726,18 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
     } catch (err) {
       console.error('Active members API error:', err);
       res.status(500).json({ error: '서버 오류' });
+    }
+  });
+
+  // ===================== WEBHOOK: zoom-token (프록시) =====================
+
+  app.get('/api/webhook/zoom-token', requireApiKey, async (req, res) => {
+    try {
+      const token = await getZoomAccessToken();
+      res.json({ success: true, access_token: token });
+    } catch (err) {
+      console.error('Zoom token proxy error:', err);
+      res.status(500).json({ error: 'Zoom 토큰 발급 실패' });
     }
   });
 };
