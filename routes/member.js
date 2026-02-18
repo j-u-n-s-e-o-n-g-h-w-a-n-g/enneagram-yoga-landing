@@ -52,6 +52,27 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
     }
   });
 
+  // ===================== MEMBER: zoom-link =====================
+
+  app.get('/api/zoom-link', requireDB, requireAuth, async (req, res) => {
+    const pool = getPool();
+    try {
+      const userId = req.session.userId;
+      const result = await pool.query(
+        "SELECT id FROM class_passes WHERE user_id = $1 AND status = 'active' AND remaining_classes > 0 AND expires_at > NOW() LIMIT 1",
+        [userId]
+      );
+      if (result.rows.length > 0) {
+        res.json({ allowed: true, zoom_url: CONFIG.ZOOM_MEETING_URL, zoom_password: CONFIG.ZOOM_PASSWORD });
+      } else {
+        res.json({ allowed: false, message: '유효한 이용권이 없습니다. 이용권을 구매하신 후 Zoom 링크를 확인하실 수 있습니다.' });
+      }
+    } catch (err) {
+      console.error('Zoom link error:', err);
+      res.status(500).json({ error: '서버 오류' });
+    }
+  });
+
   // ===================== MEMBER: passes/request =====================
 
   app.post('/api/passes/request', requireDB, requireAuth, async (req, res) => {

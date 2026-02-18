@@ -61,6 +61,13 @@ table td{padding:12px 8px;border-bottom:1px solid var(--border);font-weight:300}
 .badge-used{background:#f5f5f5;color:#888;border:1px solid #ddd}
 .badge-expired{background:#fce4ec;color:#c62828;border:1px solid #ef9a9a}
 .empty-state{text-align:center;padding:40px;color:#aaa;font-size:0.85rem;font-weight:300}
+.zoom-section{background:var(--white);border:1px solid var(--border);padding:40px;margin-bottom:30px}
+.zoom-section h3{font-family:'Cormorant Garamond',serif;font-size:1.3rem;font-weight:300;letter-spacing:0.05em;margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid var(--border)}
+.zoom-link-box{background:var(--section-bg);padding:24px;font-size:0.85rem;font-weight:300;line-height:2}
+.zoom-link-box a{color:var(--accent);text-decoration:none;font-weight:400;word-break:break-all}
+.zoom-link-box a:hover{text-decoration:underline}
+.zoom-link-box .zoom-pw{margin-top:8px;font-size:0.82rem;color:#666}
+.zoom-no-pass{text-align:center;padding:30px;color:#999;font-size:0.85rem;font-weight:300;line-height:1.8}
 .bank-info-box{background:var(--section-bg);padding:20px;margin-top:16px;font-size:0.82rem;line-height:2;font-weight:300;display:none}
 .bank-info-box strong{font-weight:500}
 .pass-table .expiry-cell{font-size:0.78rem}
@@ -101,6 +108,10 @@ footer p{font-size:0.7rem;color:#999;font-weight:300}
 <div class="stat-card"><div class="num" id="totalAttended">-</div><div class="label">총 출석 횟수</div></div>
 <div class="stat-card"><div class="num" id="activePasses">-</div><div class="label">보유 이용권</div></div>
 </div>
+<div class="zoom-section" id="zoomSection" style="display:none">
+<h3 class="eng">Zoom Class</h3>
+<div id="zoomContent"></div>
+</div>
 <div class="section-box">
 <h3 class="eng">Class Pass</h3>
 <div id="passListSection">
@@ -138,6 +149,7 @@ async function checkAuth() {
   if (data.user.role === 'admin') { window.location.href = '/admin'; return; }
   document.getElementById('welcomeMsg').textContent = data.user.name + '님, 환영합니다';
   loadMypage();
+  loadZoomLink();
 }
 async function loadMypage() {
   try {
@@ -241,6 +253,20 @@ async function loadMypage() {
       document.getElementById('attendanceList').innerHTML = aHtml;
     }
   } catch (err) { console.error(err); }
+}
+async function loadZoomLink() {
+  try {
+    const res = await fetch('/api/zoom-link');
+    const data = await res.json();
+    const section = document.getElementById('zoomSection');
+    const content = document.getElementById('zoomContent');
+    section.style.display = 'block';
+    if (data.allowed) {
+      content.innerHTML = '<div class="zoom-link-box"><strong>수업 참여 링크</strong><br><a href="' + escapeHtml(data.zoom_url) + '" target="_blank" rel="noopener">' + escapeHtml(data.zoom_url) + '</a><div class="zoom-pw">비밀번호: <strong>' + escapeHtml(data.zoom_password) + '</strong></div></div>';
+    } else {
+      content.innerHTML = '<div class="zoom-no-pass">' + escapeHtml(data.message) + '</div>';
+    }
+  } catch (err) { console.error('Zoom link error:', err); }
 }
 async function changePassword() {
   var msgEl = document.getElementById('pwMsg');
