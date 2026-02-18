@@ -62,6 +62,7 @@ section{padding:120px 40px}
 .about{background:var(--section-bg)}
 .cert-gallery{display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-top:50px;max-width:900px}
 .cert-gallery img{width:100%;aspect-ratio:3168/2115;object-fit:cover;border-radius:8px;box-shadow:0 2px 16px rgba(0,0,0,0.08);transition:transform 0.3s ease}
+.cert-gallery img:first-child{object-fit:contain;background:#fff}
 .cert-gallery img:hover{transform:scale(1.02)}
 @media(max-width:768px){.cert-gallery{grid-template-columns:1fr;gap:20px}}
 .about-grid{display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:start;margin-top:60px;max-width:900px}
