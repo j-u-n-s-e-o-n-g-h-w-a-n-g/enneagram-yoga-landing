@@ -96,7 +96,7 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
       const registerRes = await fetch(`https://api.zoom.us/v2/meetings/${meetingId}/registrants`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: user.email, first_name: user.name })
+        body: JSON.stringify({ email: user.email, first_name: user.name.length > 1 ? user.name.slice(1) : user.name, last_name: user.name.length > 1 ? user.name.slice(0, 1) : '-' })
       });
 
       if (registerRes.ok) {
@@ -155,3 +155,4 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
     }
   });
 };
+
