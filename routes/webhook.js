@@ -552,6 +552,8 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
       const creditLogs = await pool.query('SELECT * FROM credit_logs ORDER BY id');
       const notificationLog = await pool.query('SELECT * FROM notification_log ORDER BY id');
       const auditLog = await pool.query('SELECT * FROM audit_log ORDER BY id');
+      const webhookRawLog = await pool.query('SELECT * FROM webhook_raw_log ORDER BY id');
+      const consentLog = await pool.query('SELECT * FROM consent_log ORDER BY id');
 
       res.json({
         success: true,
@@ -566,7 +568,9 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
           care_sms_log: careSmsLog.rows,
           credit_logs: creditLogs.rows,
           notification_log: notificationLog.rows,
-          audit_log: auditLog.rows
+          audit_log: auditLog.rows,
+          webhook_raw_log: webhookRawLog.rows,
+          consent_log: consentLog.rows
         },
         counts: {
           users: users.rows.length,
@@ -578,7 +582,9 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
           care_sms_log: careSmsLog.rows.length,
           credit_logs: creditLogs.rows.length,
           notification_log: notificationLog.rows.length,
-          audit_log: auditLog.rows.length
+          audit_log: auditLog.rows.length,
+          webhook_raw_log: webhookRawLog.rows.length,
+          consent_log: consentLog.rows.length
         }
       });
     } catch (err) {
@@ -615,6 +621,8 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
       const creditLogs = await pool.query('SELECT * FROM credit_logs ORDER BY id');
       const notificationLog = await pool.query('SELECT * FROM notification_log ORDER BY id');
       const auditLog = await pool.query('SELECT * FROM audit_log ORDER BY id');
+      const webhookRawLog = await pool.query('SELECT * FROM webhook_raw_log ORDER BY id');
+      const consentLog = await pool.query('SELECT * FROM consent_log ORDER BY id');
 
       const backupData = {
         backup_date: now.toISOString(),
@@ -628,7 +636,9 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
           care_sms_log: careSmsLog.rows.length,
           credit_logs: creditLogs.rows.length,
           notification_log: notificationLog.rows.length,
-          audit_log: auditLog.rows.length
+          audit_log: auditLog.rows.length,
+          webhook_raw_log: webhookRawLog.rows.length,
+          consent_log: consentLog.rows.length
         },
         data: {
           users: users.rows,
@@ -640,7 +650,9 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
           care_sms_log: careSmsLog.rows,
           credit_logs: creditLogs.rows,
           notification_log: notificationLog.rows,
-          audit_log: auditLog.rows
+          audit_log: auditLog.rows,
+          webhook_raw_log: webhookRawLog.rows,
+          consent_log: consentLog.rows
         }
       };
 
