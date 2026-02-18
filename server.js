@@ -29,11 +29,41 @@ const CONFIG = {
   DISCORD_WEBHOOK_URL: process.env.DISCORD_WEBHOOK_URL || '',
   ZOOM_MEETING_URL: process.env.ZOOM_MEETING_URL || '',
   ZOOM_PASSWORD: process.env.ZOOM_PASSWORD || 'yoga',
+  ZOOM_ACCOUNT_ID: process.env.ZOOM_ACCOUNT_ID || '',
+  ZOOM_CLIENT_ID: process.env.ZOOM_CLIENT_ID || '',
+  ZOOM_CLIENT_SECRET: process.env.ZOOM_CLIENT_SECRET || '',
+  ZOOM_MEETING_ID: process.env.ZOOM_MEETING_ID || '87426930070',
   BACKUP_GITHUB_TOKEN: process.env.BACKUP_GITHUB_TOKEN || '',
   BACKUP_GITHUB_OWNER: process.env.BACKUP_GITHUB_OWNER || '',
   BACKUP_GITHUB_REPO: process.env.BACKUP_GITHUB_REPO || '',
   BACKUP_GITHUB_BRANCH: process.env.BACKUP_GITHUB_BRANCH || 'main',
 };
+
+// ===================== ZOOM OAuth TOKEN =====================
+let zoomTokenCache = { token: null, expiresAt: 0 };
+
+async function getZoomAccessToken() {
+  const now = Date.now();
+  if (zoomTokenCache.token && zoomTokenCache.expiresAt > now + 5 * 60 * 1000) {
+    return zoomTokenCache.token;
+  }
+  const { ZOOM_ACCOUNT_ID, ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET } = CONFIG;
+  if (!ZOOM_ACCOUNT_ID || !ZOOM_CLIENT_ID || !ZOOM_CLIENT_SECRET) {
+    throw new Error('Zoom OAuth credentials not configured');
+  }
+  const basicAuth = Buffer.from(`${ZOOM_CLIENT_ID}:${ZOOM_CLIENT_SECRET}`).toString('base64');
+  const response = await fetch(
+    `https://zoom.us/oauth/token?grant_type=account_credentials&account_id=${ZOOM_ACCOUNT_ID}`,
+    { method: 'POST', headers: { 'Authorization': `Basic ${basicAuth}`, 'Content-Type': 'application/x-www-form-urlencoded' } }
+  );
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Zoom OAuth failed: ${response.status} ${errText}`);
+  }
+  const data = await response.json();
+  zoomTokenCache = { token: data.access_token, expiresAt: now + (data.expires_in * 1000) };
+  return zoomTokenCache.token;
+}
 
 // ===================== 서비스 초기화 =====================
 const smsService = require('./services/sms')(CONFIG);
@@ -127,6 +157,7 @@ app.use('/api/applications', requireCsrf);
 app.use('/api/members', requireCsrf);
 app.use('/api/admin', requireCsrf);
 app.use('/api/passes', requireCsrf);
+app.use('/api/zoom-register', requireCsrf);
 
 // ===================== Rate Limiter =====================
 const appRateLimiter = (() => {
@@ -143,7 +174,7 @@ const appRateLimiter = (() => {
 })();
 
 // ===================== 라우트 컨텍스트 =====================
-const routeContext = { getPool, isDBReady, CONFIG, middleware, services };
+const routeContext = { getPool, isDBReady, CONFIG, middleware, services, getZoomAccessToken };
 
 // ===================== CONFIG API (공개) =====================
 

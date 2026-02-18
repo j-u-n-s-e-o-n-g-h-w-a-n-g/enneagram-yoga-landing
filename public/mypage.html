@@ -63,11 +63,11 @@ table td{padding:12px 8px;border-bottom:1px solid var(--border);font-weight:300}
 .empty-state{text-align:center;padding:40px;color:#aaa;font-size:0.85rem;font-weight:300}
 .zoom-section{background:var(--white);border:1px solid var(--border);padding:40px;margin-bottom:30px}
 .zoom-section h3{font-family:'Cormorant Garamond',serif;font-size:1.3rem;font-weight:300;letter-spacing:0.05em;margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid var(--border)}
-.zoom-link-box{background:var(--section-bg);padding:24px;font-size:0.85rem;font-weight:300;line-height:2}
-.zoom-link-box a{color:var(--accent);text-decoration:none;font-weight:400;word-break:break-all}
-.zoom-link-box a:hover{text-decoration:underline}
-.zoom-link-box .zoom-pw{margin-top:8px;font-size:0.82rem;color:#666}
+.zoom-join-link{display:inline-block;padding:12px 40px;background:var(--text);color:var(--white);font-family:'Cormorant Garamond',serif;font-size:0.8rem;letter-spacing:0.15em;text-transform:uppercase;text-decoration:none;transition:all 0.4s;border:1px solid var(--text)}
+.zoom-join-link:hover{background:transparent;color:var(--text)}
+.zoom-result{background:var(--section-bg);padding:24px;margin-top:20px;font-size:0.85rem;font-weight:300;line-height:1.8}
 .zoom-no-pass{text-align:center;padding:30px;color:#999;font-size:0.85rem;font-weight:300;line-height:1.8}
+.purchase-btn:disabled{opacity:0.5;cursor:not-allowed}
 .bank-info-box{background:var(--section-bg);padding:20px;margin-top:16px;font-size:0.82rem;line-height:2;font-weight:300;display:none}
 .bank-info-box strong{font-weight:500}
 .pass-table .expiry-cell{font-size:0.78rem}
@@ -110,7 +110,14 @@ footer p{font-size:0.7rem;color:#999;font-weight:300}
 </div>
 <div class="zoom-section" id="zoomSection" style="display:none">
 <h3 class="eng">Zoom Class</h3>
-<div id="zoomContent"></div>
+<div id="zoomContent">
+<p style="font-size:0.85rem;font-weight:300;color:#666;margin-bottom:20px">아래 버튼을 클릭하면 Zoom 수업에 등록되며, 전용 입장 링크가 발급됩니다.</p>
+<button class="purchase-btn eng" id="zoomJoinBtn" onclick="registerZoom()">Join Class</button>
+<div class="zoom-result" id="zoomResult" style="display:none"></div>
+</div>
+<div id="zoomNoPass" style="display:none">
+<div class="zoom-no-pass">유효한 이용권이 없어 수업에 참여할 수 없습니다.<br>아래에서 이용권을 구매해주세요.</div>
+</div>
 </div>
 <div class="section-box">
 <h3 class="eng">Class Pass</h3>
@@ -149,7 +156,7 @@ async function checkAuth() {
   if (data.user.role === 'admin') { window.location.href = '/admin'; return; }
   document.getElementById('welcomeMsg').textContent = data.user.name + '님, 환영합니다';
   loadMypage();
-  loadZoomLink();
+  loadZoomStatus();
 }
 async function loadMypage() {
   try {
@@ -254,19 +261,46 @@ async function loadMypage() {
     }
   } catch (err) { console.error(err); }
 }
-async function loadZoomLink() {
+async function loadZoomStatus() {
   try {
-    const res = await fetch('/api/zoom-link');
+    const res = await fetch('/api/zoom-status');
     const data = await res.json();
     const section = document.getElementById('zoomSection');
-    const content = document.getElementById('zoomContent');
     section.style.display = 'block';
-    if (data.allowed) {
-      content.innerHTML = '<div class="zoom-link-box"><strong>수업 참여 링크</strong><br><a href="' + escapeHtml(data.zoom_url) + '" target="_blank" rel="noopener">' + escapeHtml(data.zoom_url) + '</a><div class="zoom-pw">비밀번호: <strong>' + escapeHtml(data.zoom_password) + '</strong></div></div>';
+    if (data.hasPass) {
+      document.getElementById('zoomContent').style.display = 'block';
+      document.getElementById('zoomNoPass').style.display = 'none';
     } else {
-      content.innerHTML = '<div class="zoom-no-pass">' + escapeHtml(data.message) + '</div>';
+      document.getElementById('zoomContent').style.display = 'none';
+      document.getElementById('zoomNoPass').style.display = 'block';
     }
-  } catch (err) { console.error('Zoom link error:', err); }
+  } catch (err) { console.error('Zoom status error:', err); }
+}
+async function registerZoom() {
+  var btn = document.getElementById('zoomJoinBtn');
+  var resultDiv = document.getElementById('zoomResult');
+  btn.disabled = true;
+  btn.textContent = '등록 중...';
+  try {
+    var res = await apiFetch('/api/zoom-register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+    var data = await res.json();
+    if (data.success && data.join_url) {
+      resultDiv.innerHTML = '<p><strong>수업 참여 준비가 완료되었습니다!</strong></p><p style="margin-top:12px"><a href="' + escapeHtml(data.join_url) + '" target="_blank" rel="noopener" class="zoom-join-link">Zoom 수업 입장</a></p><p style="margin-top:12px;font-size:0.78rem;color:#888">이 링크는 회원님 전용입니다. 다른 분과 공유하지 마세요.</p>';
+      resultDiv.style.display = 'block';
+      btn.style.display = 'none';
+    } else {
+      resultDiv.innerHTML = '<p style="color:#c44">' + escapeHtml(data.error || '등록 중 오류가 발생했습니다') + '</p>';
+      resultDiv.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Join Class';
+    }
+  } catch (err) {
+    console.error('Zoom register error:', err);
+    resultDiv.innerHTML = '<p style="color:#c44">서버 연결에 실패했습니다. 다시 시도해주세요.</p>';
+    resultDiv.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Join Class';
+  }
 }
 async function changePassword() {
   var msgEl = document.getElementById('pwMsg');

@@ -1,4 +1,4 @@
-module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, services }) {
+module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, services, getZoomAccessToken }) {
   const { requireDB, requireAuth } = middleware;
 
   // ===================== Helper: auto-expire passes =====================
@@ -52,9 +52,9 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
     }
   });
 
-  // ===================== MEMBER: zoom-link =====================
+  // ===================== MEMBER: zoom-register =====================
 
-  app.get('/api/zoom-link', requireDB, requireAuth, async (req, res) => {
+  app.get('/api/zoom-status', requireDB, requireAuth, async (req, res) => {
     const pool = getPool();
     try {
       const userId = req.session.userId;
@@ -62,14 +62,68 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
         "SELECT id FROM class_passes WHERE user_id = $1 AND status = 'active' AND remaining_classes > 0 AND expires_at > NOW() LIMIT 1",
         [userId]
       );
-      if (result.rows.length > 0) {
-        res.json({ allowed: true, zoom_url: CONFIG.ZOOM_MEETING_URL, zoom_password: CONFIG.ZOOM_PASSWORD });
-      } else {
-        res.json({ allowed: false, message: '유효한 이용권이 없습니다. 이용권을 구매하신 후 Zoom 링크를 확인하실 수 있습니다.' });
-      }
+      res.json({ hasPass: result.rows.length > 0 });
     } catch (err) {
-      console.error('Zoom link error:', err);
+      console.error('Zoom status error:', err);
       res.status(500).json({ error: '서버 오류' });
+    }
+  });
+
+  app.post('/api/zoom-register', requireDB, requireAuth, async (req, res) => {
+    const pool = getPool();
+    try {
+      const userId = req.session.userId;
+
+      // 1. Check valid class pass
+      const passResult = await pool.query(
+        "SELECT id FROM class_passes WHERE user_id = $1 AND status = 'active' AND remaining_classes > 0 AND expires_at > NOW() LIMIT 1",
+        [userId]
+      );
+      if (passResult.rows.length === 0) {
+        return res.status(403).json({ error: '유효한 이용권이 없습니다. 이용권을 구매해주세요.', hasPass: false });
+      }
+
+      // 2. Get user info
+      const userResult = await pool.query('SELECT name, email FROM users WHERE id = $1', [userId]);
+      if (userResult.rows.length === 0) return res.status(404).json({ error: '사용자를 찾을 수 없습니다' });
+      const user = userResult.rows[0];
+
+      // 3. Get Zoom access token
+      const accessToken = await getZoomAccessToken();
+      const meetingId = CONFIG.ZOOM_MEETING_ID;
+
+      // 4. Register as Zoom meeting registrant
+      const registerRes = await fetch(`https://api.zoom.us/v2/meetings/${meetingId}/registrants`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: user.email, first_name: user.name })
+      });
+
+      if (registerRes.ok) {
+        const regData = await registerRes.json();
+        return res.json({ success: true, join_url: regData.join_url });
+      }
+
+      // 5. Handle duplicate registration
+      const errBody = await registerRes.json().catch(() => ({}));
+      if (registerRes.status === 409 || errBody.code === 3027) {
+        // Fetch existing registration
+        const listRes = await fetch(`https://api.zoom.us/v2/meetings/${meetingId}/registrants?status=approved&page_size=300`, {
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        if (listRes.ok) {
+          const listData = await listRes.json();
+          const existing = listData.registrants.find(r => r.email.toLowerCase() === user.email.toLowerCase());
+          if (existing) return res.json({ success: true, join_url: existing.join_url });
+        }
+        return res.status(500).json({ error: 'Zoom 등록 정보를 가져올 수 없습니다. 관리자에게 문의해주세요.' });
+      }
+
+      console.error('Zoom registration error:', registerRes.status, errBody);
+      return res.status(500).json({ error: 'Zoom 등록 중 오류가 발생했습니다' });
+    } catch (err) {
+      console.error('Zoom register error:', err);
+      res.status(500).json({ error: '서버 오류가 발생했습니다' });
     }
   });
 
