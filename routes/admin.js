@@ -669,4 +669,263 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
       res.status(500).json({ error: '서버 오류' });
     }
   });
+
+  // ===================== ADMIN: 수동 이용권 차감 =====================
+
+  app.post('/api/admin/members/:id/deduct-credits', requireDB, requireAdmin, async (req, res) => {
+    const pool = getPool();
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const userId = parseInt(req.params.id);
+      if (isNaN(userId)) { await client.query('ROLLBACK'); return res.status(400).json({ error: '잘못된 요청입니다' }); }
+      const { credits, note } = req.body;
+      const deductCount = parseInt(credits);
+      if (!deductCount || deductCount < 1 || deductCount > 100) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: '차감할 횟수는 1~100 사이여야 합니다' });
+      }
+
+      // 활성 이용권에서 차감 (가장 오래된 것부터)
+      const passResult = await client.query(
+        "SELECT * FROM class_passes WHERE user_id = $1 AND status = 'active' AND remaining_classes > 0 AND (expires_at IS NULL OR expires_at > NOW()) ORDER BY purchased_at ASC",
+        [userId]
+      );
+      if (passResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: '사용 가능한 이용권이 없습니다' });
+      }
+
+      let remaining = deductCount;
+      const deductedPasses = [];
+      for (const pass of passResult.rows) {
+        if (remaining <= 0) break;
+        const canDeduct = Math.min(remaining, pass.remaining_classes);
+        await client.query(
+          'UPDATE class_passes SET remaining_classes = remaining_classes - $1 WHERE id = $2',
+          [canDeduct, pass.id]
+        );
+        // 소진되면 상태 변경
+        if (pass.remaining_classes - canDeduct <= 0) {
+          await client.query("UPDATE class_passes SET status = 'used' WHERE id = $1", [pass.id]);
+        }
+        deductedPasses.push({ pass_id: pass.id, deducted: canDeduct });
+        remaining -= canDeduct;
+      }
+
+      if (remaining > 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: '잔여 횟수가 부족합니다. 차감 가능: ' + (deductCount - remaining) + '회' });
+      }
+
+      // 이력 기록 (음수 값으로)
+      await client.query(
+        'INSERT INTO credit_logs (user_id, class_pass_id, credits, note) VALUES ($1, $2, $3, $4)',
+        [userId, deductedPasses[0].pass_id, -deductCount, note || '관리자 수동 차감']
+      );
+
+      await client.query('COMMIT');
+
+      const updated = await pool.query(
+        "SELECT COALESCE(SUM(remaining_classes), 0) as total_remaining FROM class_passes WHERE user_id = $1 AND status = 'active'",
+        [userId]
+      );
+      await logAudit(pool, req.session.userId, 'deduct_credits', { member_id: userId, credits: deductCount, note: note || '' });
+      res.json({
+        success: true,
+        deducted: deductCount,
+        total_remaining: parseInt(updated.rows[0].total_remaining),
+        note: note || ''
+      });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      console.error('Deduct credits error:', err);
+      res.status(500).json({ error: '서버 오류' });
+    } finally {
+      client.release();
+    }
+  });
+
+  // ===================== ADMIN: 수업 참여 이력 (Zoom 출석) =====================
+
+  app.get('/api/admin/attendance-history', requireDB, requireAdmin, async (req, res) => {
+    const pool = getPool();
+    try {
+      const page = parseInt(req.query.page) || 1;
+      const limit = Math.min(parseInt(req.query.limit) || 30, 100);
+      const offset = (page - 1) * limit;
+      const search = req.query.search || '';
+      const dateFrom = req.query.from || '';
+      const dateTo = req.query.to || '';
+
+      let whereClause = 'WHERE 1=1';
+      const params = [];
+      let paramIdx = 1;
+
+      if (dateFrom) {
+        whereClause += ' AND a.attended_at >= $' + paramIdx + '::date';
+        params.push(dateFrom);
+        paramIdx++;
+      }
+      if (dateTo) {
+        whereClause += ' AND a.attended_at < ($' + paramIdx + '::date + INTERVAL \'1 day\')';
+        params.push(dateTo);
+        paramIdx++;
+      }
+      if (search) {
+        whereClause += ' AND (u.name ILIKE $' + paramIdx + ' OR u.email ILIKE $' + paramIdx + ' OR u.phone ILIKE $' + paramIdx + ')';
+        params.push('%' + search + '%');
+        paramIdx++;
+      }
+
+      const countQuery = 'SELECT COUNT(*) FROM attendance a LEFT JOIN users u ON a.user_id = u.id ' + whereClause;
+      const countResult = await pool.query(countQuery, params);
+      const totalCount = parseInt(countResult.rows[0].count);
+
+      const dataQuery = `
+        SELECT a.id, a.attended_at, a.note, a.zoom_meeting_uuid,
+          u.name as user_name, u.email as user_email, u.phone as user_phone,
+          cp.total_classes, cp.remaining_classes as pass_remaining, cp.status as pass_status
+        FROM attendance a
+        LEFT JOIN users u ON a.user_id = u.id
+        LEFT JOIN class_passes cp ON a.class_pass_id = cp.id
+        ${whereClause}
+        ORDER BY a.attended_at DESC
+        LIMIT $${paramIdx} OFFSET $${paramIdx + 1}
+      `;
+      params.push(limit, offset);
+
+      const result = await pool.query(dataQuery, params);
+
+      res.json({
+        attendance: result.rows,
+        pagination: { page, limit, total: totalCount, totalPages: Math.ceil(totalCount / limit) }
+      });
+    } catch (err) {
+      console.error('Attendance history error:', err);
+      res.status(500).json({ error: '수업 이력 조회 오류: ' + err.message });
+    }
+  });
+
+  // ===================== ADMIN: 메시지 발송 이력 =====================
+
+  app.get('/api/admin/message-history', requireDB, requireAdmin, async (req, res) => {
+    const pool = getPool();
+    try {
+      const page = parseInt(req.query.page) || 1;
+      const limit = Math.min(parseInt(req.query.limit) || 30, 100);
+      const offset = (page - 1) * limit;
+      const typeFilter = req.query.type || 'all';
+      const search = req.query.search || '';
+      const dateFrom = req.query.from || '';
+      const dateTo = req.query.to || '';
+
+      // 파라미터를 미리 고정 위치에 배치: $1=dateFrom, $2=dateTo, $3=search
+      // 사용하지 않는 경우에도 더미값을 넣어 인덱스를 안정적으로 유지
+      const params = [
+        dateFrom || '1970-01-01',   // $1
+        dateTo || '2099-12-31',     // $2
+        search ? '%' + search + '%' : '%NOMATCH_PLACEHOLDER%'  // $3
+      ];
+
+      // notification_log 기본 쿼리
+      let nlWhere = 'WHERE nl.created_at >= $1::date AND nl.created_at < ($2::date + INTERVAL \'1 day\')';
+      if (typeFilter === 'sms') nlWhere += " AND nl.type = 'sms'";
+      else if (typeFilter === 'email') nlWhere += " AND nl.type = 'email'";
+      else if (typeFilter === 'cashreceipt') nlWhere += " AND nl.type = 'cashreceipt'";
+      // journaling/care 전용 필터일 때는 notification_log에서 결과 없도록
+      else if (typeFilter === 'journaling' || typeFilter === 'care') nlWhere += " AND 1=0";
+
+      if (search) {
+        nlWhere += ' AND (u.name ILIKE $3 OR u.phone ILIKE $3 OR u.email ILIKE $3)';
+      }
+
+      const nlQuery = `
+        SELECT nl.id, nl.created_at, nl.type, nl.status, nl.detail,
+          u.name as user_name, u.phone as user_phone, u.email as user_email,
+          CASE
+            WHEN nl.detail::text LIKE '%"bulk":true%' THEN 'bulk'
+            WHEN nl.detail::text LIKE '%"manual":true%' THEN 'manual'
+            ELSE 'auto'
+          END as send_method,
+          COALESCE(nl.detail->>'sms_type', nl.type) as sub_type
+        FROM notification_log nl
+        LEFT JOIN users u ON nl.user_id = u.id
+        ${nlWhere}
+      `;
+
+      // journaling_sms_log UNION
+      let journalingUnion = '';
+      if (typeFilter === 'all' || typeFilter === 'sms' || typeFilter === 'journaling') {
+        let jWhere = 'WHERE jsl.sent_at >= $1::date AND jsl.sent_at < ($2::date + INTERVAL \'1 day\')';
+        if (search) jWhere += ' AND (u2.name ILIKE $3 OR u2.phone ILIKE $3)';
+        journalingUnion = `
+          UNION ALL
+          SELECT jsl.id + 1000000 as id, jsl.sent_at as created_at,
+            'sms' as type, 'success' as status,
+            json_build_object('sms_type', jsl.send_type, 'source', 'journaling')::jsonb as detail,
+            u2.name as user_name, u2.phone as user_phone, u2.email as user_email,
+            'auto' as send_method, 'journaling_' || jsl.send_type as sub_type
+          FROM journaling_sms_log jsl
+          LEFT JOIN users u2 ON jsl.user_id = u2.id
+          ${jWhere}
+        `;
+      }
+
+      // care_sms_log UNION
+      let careUnion = '';
+      if (typeFilter === 'all' || typeFilter === 'sms' || typeFilter === 'care') {
+        let cWhere = 'WHERE csl.sent_at >= $1::date AND csl.sent_at < ($2::date + INTERVAL \'1 day\')';
+        if (search) cWhere += ' AND (u3.name ILIKE $3 OR u3.phone ILIKE $3)';
+        careUnion = `
+          UNION ALL
+          SELECT csl.id + 2000000 as id, csl.sent_at as created_at,
+            'sms' as type, 'success' as status,
+            json_build_object('sms_type', csl.sms_type, 'source', 'care')::jsonb as detail,
+            u3.name as user_name, u3.phone as user_phone, u3.email as user_email,
+            'auto' as send_method, 'care_' || csl.sms_type as sub_type
+          FROM care_sms_log csl
+          LEFT JOIN users u3 ON csl.user_id = u3.id
+          ${cWhere}
+        `;
+      }
+
+      const fullQuery = `
+        WITH combined AS (
+          ${nlQuery}
+          ${journalingUnion}
+          ${careUnion}
+        )
+        SELECT * FROM combined
+        ORDER BY created_at DESC
+        LIMIT $4 OFFSET $5
+      `;
+      params.push(limit, offset); // $4, $5
+
+      const countQuery = `
+        WITH combined AS (
+          ${nlQuery}
+          ${journalingUnion}
+          ${careUnion}
+        )
+        SELECT COUNT(*) FROM combined
+      `;
+      const countParams = params.slice(0, 3); // $1~$3만
+
+      const [result, countResult] = await Promise.all([
+        pool.query(fullQuery, params),
+        pool.query(countQuery, countParams)
+      ]);
+
+      const totalCount = parseInt(countResult.rows[0].count);
+
+      res.json({
+        messages: result.rows,
+        pagination: { page, limit, total: totalCount, totalPages: Math.ceil(totalCount / limit) }
+      });
+    } catch (err) {
+      console.error('Message history error:', err.message);
+      res.status(500).json({ error: '메시지 이력 조회 오류: ' + err.message });
+    }
+  });
 };
