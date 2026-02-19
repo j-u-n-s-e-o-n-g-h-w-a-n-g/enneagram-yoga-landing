@@ -143,6 +143,7 @@ footer p{font-size:0.7rem;color:#999;font-weight:300}
 <button class="tab" onclick="switchTab('members')">회원 관리</button>
 <button class="tab" onclick="switchTab('applications')">신청 관리</button>
 <button class="tab" onclick="switchTab('bulk-sms')">단체 SMS</button>
+<button class="tab" onclick="switchTab('attendance-history')">수업 이력</button>
 <button class="tab" onclick="switchTab('messages')">메시지 이력</button>
 </div>
 <div class="tab-content active" id="tab-payments">
@@ -200,6 +201,22 @@ footer p{font-size:0.7rem;color:#999;font-weight:300}
 <div style="font-size:0.85rem;font-weight:400;margin-bottom:8px">발송 결과</div>
 <div id="bulkResultContent"></div>
 </div>
+</div>
+</div>
+<div class="tab-content" id="tab-attendance-history">
+<div style="display:flex;gap:12px;align-items:flex-end;margin-bottom:16px;flex-wrap:wrap">
+<div class="date-filter" style="margin-bottom:0">
+<label style="font-size:0.78rem;white-space:nowrap">기간:</label>
+<input type="date" id="attDateFrom">
+<span style="font-size:0.78rem">~</span>
+<input type="date" id="attDateTo">
+</div>
+<div style="flex:1;min-width:180px"><input type="text" id="searchAttendance" placeholder="이름, 이메일, 전화번호로 검색..." style="width:100%;padding:8px 10px;border:1px solid var(--border);font-family:'Noto Serif KR',serif;font-size:0.8rem;outline:none" onkeyup="if(event.key==='Enter')loadAttendanceHistory()"></div>
+<button class="action-btn small" onclick="loadAttendanceHistory()">검색</button>
+</div>
+<div class="section-box">
+<div id="attendanceHistoryList"><div class="loading">불러오는 중</div></div>
+<div id="attendancePagination"></div>
 </div>
 </div>
 <div class="tab-content" id="tab-messages">
@@ -268,6 +285,12 @@ footer p{font-size:0.7rem;color:#999;font-weight:300}
 <input type="number" id="addCreditsCount" min="1" max="100" value="1" placeholder="횟수">
 <input type="text" id="addCreditsNote" placeholder="메모 (선택)">
 <button class="action-btn" onclick="addCredits()">추가</button>
+</div>
+<div class="add-credits-form" style="border-color:#e57373">
+<label style="color:#c44">이용권 횟수 차감:</label>
+<input type="number" id="deductCreditsCount" min="1" max="100" value="1" placeholder="횟수">
+<input type="text" id="deductCreditsNote" placeholder="차감 사유 (선택)">
+<button class="action-btn danger" onclick="deductCredits()">차감</button>
 </div>
 <div class="section-box"><div id="detailPasses"><div class="empty-state">이용권이 없습니다</div></div></div>
 <div style="margin-top:20px">
@@ -759,6 +782,7 @@ function switchTab(tab) {
   event.target.classList.add('active');
   document.getElementById('tab-' + tab).classList.add('active');
   if (tab === 'messages') { loadMessageHistory(1); }
+  if (tab === 'attendance-history') { loadAttendanceHistory(1); }
   if (tab === 'bulk-sms') { loadBulkTargets(currentBulkType); }
 }
 
@@ -1083,6 +1107,109 @@ async function sendBulkSms() {
   } catch (err) {
     console.error('Bulk SMS error:', err);
     showToast('발송 중 오류가 발생했습니다', 'error');
+  }
+}
+
+// ===================== 수업 참여 이력 =====================
+let attPage = 1;
+const ATT_PAGE_SIZE = 30;
+
+async function loadAttendanceHistory(page) {
+  if (page !== undefined) attPage = page;
+  showLoading('attendanceHistoryList');
+  try {
+    const dateFrom = document.getElementById('attDateFrom').value;
+    const dateTo = document.getElementById('attDateTo').value;
+    const search = document.getElementById('searchAttendance').value;
+    let url = '/api/admin/attendance-history?page=' + attPage + '&limit=' + ATT_PAGE_SIZE;
+    if (dateFrom) url += '&from=' + dateFrom;
+    if (dateTo) url += '&to=' + dateTo;
+    if (search) url += '&search=' + encodeURIComponent(search);
+
+    const res = await apiFetch(url);
+    if (!res.ok) {
+      document.getElementById('attendanceHistoryList').innerHTML = '<div class="empty-state">수업 이력을 불러올 수 없습니다 (HTTP ' + res.status + ')</div>';
+      document.getElementById('attendancePagination').innerHTML = '';
+      return;
+    }
+    const data = await res.json();
+    if (data.error) {
+      document.getElementById('attendanceHistoryList').innerHTML = '<div class="empty-state">' + escapeHtml(data.error) + '</div>';
+      document.getElementById('attendancePagination').innerHTML = '';
+      return;
+    }
+    const items = data.attendance || [];
+    const total = (data.pagination && data.pagination.total) || 0;
+    const totalPages = Math.ceil(total / ATT_PAGE_SIZE) || 1;
+
+    if (items.length === 0) {
+      document.getElementById('attendanceHistoryList').innerHTML = '<div class="empty-state">수업 참여 이력이 없습니다</div>';
+      document.getElementById('attendancePagination').innerHTML = '';
+      return;
+    }
+
+    let html = '<div style="margin-bottom:12px;font-size:0.78rem;color:#888">총 ' + total + '건</div>';
+    html += '<table><thead><tr><th>날짜</th><th>시간</th><th>회원명</th><th>이메일</th><th>연락처</th><th>이용권 상태</th><th>비고</th></tr></thead><tbody>';
+
+    items.forEach(function(a) {
+      var dt = new Date(a.attended_at);
+      var date = dt.toLocaleDateString('ko-KR');
+      var time = dt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+      var passInfo = a.pass_status ? (a.pass_remaining + '/' + a.total_classes + '회') : '-';
+      var passBadge = a.pass_status === 'active' ? 'badge-active' : a.pass_status === 'used' ? 'badge-used' : 'badge-expired';
+      var passLabel = a.pass_status === 'active' ? '활성' : a.pass_status === 'used' ? '소진' : (a.pass_status || '-');
+      var note = a.note || '';
+      if (a.zoom_meeting_uuid) note = (note ? note + ' ' : '') + '🎥 Zoom';
+
+      html += '<tr>';
+      html += '<td style="white-space:nowrap">' + date + '</td>';
+      html += '<td>' + time + '</td>';
+      html += '<td><strong>' + escapeHtml(a.user_name || '-') + '</strong></td>';
+      html += '<td style="font-size:0.76rem">' + escapeHtml(a.user_email || '-') + '</td>';
+      html += '<td style="font-size:0.76rem">' + escapeHtml(a.user_phone || '-') + '</td>';
+      html += '<td><span class="badge ' + passBadge + '">' + passLabel + '</span> <span style="font-size:0.72rem;color:#888">' + passInfo + '</span></td>';
+      html += '<td style="font-size:0.76rem;color:#888">' + escapeHtml(note) + '</td>';
+      html += '</tr>';
+    });
+
+    html += '</tbody></table>';
+    document.getElementById('attendanceHistoryList').innerHTML = html;
+    renderPagination('attendancePagination', attPage, totalPages, 'goAttPage');
+  } catch (err) {
+    console.error('Attendance history error:', err);
+    document.getElementById('attendanceHistoryList').innerHTML = '<div class="empty-state">조회 중 오류가 발생했습니다</div>';
+  }
+}
+
+function goAttPage(page) { loadAttendanceHistory(page); }
+
+// ===================== 수동 이용권 차감 =====================
+
+async function deductCredits() {
+  if (!currentMemberId) return;
+  var credits = parseInt(document.getElementById('deductCreditsCount').value);
+  var note = document.getElementById('deductCreditsNote').value;
+  if (!credits || credits < 1) { showToast('차감할 횟수를 입력해주세요', 'error'); return; }
+  if (!confirm(credits + '회를 차감하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) return;
+
+  try {
+    var res = await apiFetch('/api/admin/members/' + currentMemberId + '/deduct-credits', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ credits: credits, note: note })
+    });
+    var data = await res.json();
+    if (data.success) {
+      showToast(data.deducted + '회가 차감되었습니다. 현재 잔여: ' + data.total_remaining + '회', 'success');
+      document.getElementById('deductCreditsCount').value = '1';
+      document.getElementById('deductCreditsNote').value = '';
+      openMemberDetail(currentMemberId);
+      loadStats();
+    } else {
+      showToast(data.error || '오류가 발생했습니다', 'error');
+    }
+  } catch (err) {
+    showToast('오류가 발생했습니다', 'error');
   }
 }
 

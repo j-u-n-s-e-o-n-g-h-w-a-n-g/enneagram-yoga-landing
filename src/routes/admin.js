@@ -670,6 +670,143 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
     }
   });
 
+  // ===================== ADMIN: 수동 이용권 차감 =====================
+
+  app.post('/api/admin/members/:id/deduct-credits', requireDB, requireAdmin, async (req, res) => {
+    const pool = getPool();
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const userId = parseInt(req.params.id);
+      if (isNaN(userId)) { await client.query('ROLLBACK'); return res.status(400).json({ error: '잘못된 요청입니다' }); }
+      const { credits, note } = req.body;
+      const deductCount = parseInt(credits);
+      if (!deductCount || deductCount < 1 || deductCount > 100) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: '차감할 횟수는 1~100 사이여야 합니다' });
+      }
+
+      // 활성 이용권에서 차감 (가장 오래된 것부터)
+      const passResult = await client.query(
+        "SELECT * FROM class_passes WHERE user_id = $1 AND status = 'active' AND remaining_classes > 0 AND (expires_at IS NULL OR expires_at > NOW()) ORDER BY purchased_at ASC",
+        [userId]
+      );
+      if (passResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: '사용 가능한 이용권이 없습니다' });
+      }
+
+      let remaining = deductCount;
+      const deductedPasses = [];
+      for (const pass of passResult.rows) {
+        if (remaining <= 0) break;
+        const canDeduct = Math.min(remaining, pass.remaining_classes);
+        await client.query(
+          'UPDATE class_passes SET remaining_classes = remaining_classes - $1 WHERE id = $2',
+          [canDeduct, pass.id]
+        );
+        // 소진되면 상태 변경
+        if (pass.remaining_classes - canDeduct <= 0) {
+          await client.query("UPDATE class_passes SET status = 'used' WHERE id = $1", [pass.id]);
+        }
+        deductedPasses.push({ pass_id: pass.id, deducted: canDeduct });
+        remaining -= canDeduct;
+      }
+
+      if (remaining > 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: '잔여 횟수가 부족합니다. 차감 가능: ' + (deductCount - remaining) + '회' });
+      }
+
+      // 이력 기록 (음수 값으로)
+      await client.query(
+        'INSERT INTO credit_logs (user_id, class_pass_id, credits, note) VALUES ($1, $2, $3, $4)',
+        [userId, deductedPasses[0].pass_id, -deductCount, note || '관리자 수동 차감']
+      );
+
+      await client.query('COMMIT');
+
+      const updated = await pool.query(
+        "SELECT COALESCE(SUM(remaining_classes), 0) as total_remaining FROM class_passes WHERE user_id = $1 AND status = 'active'",
+        [userId]
+      );
+      await logAudit(pool, req.session.userId, 'deduct_credits', { member_id: userId, credits: deductCount, note: note || '' });
+      res.json({
+        success: true,
+        deducted: deductCount,
+        total_remaining: parseInt(updated.rows[0].total_remaining),
+        note: note || ''
+      });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      console.error('Deduct credits error:', err);
+      res.status(500).json({ error: '서버 오류' });
+    } finally {
+      client.release();
+    }
+  });
+
+  // ===================== ADMIN: 수업 참여 이력 (Zoom 출석) =====================
+
+  app.get('/api/admin/attendance-history', requireDB, requireAdmin, async (req, res) => {
+    const pool = getPool();
+    try {
+      const page = parseInt(req.query.page) || 1;
+      const limit = Math.min(parseInt(req.query.limit) || 30, 100);
+      const offset = (page - 1) * limit;
+      const search = req.query.search || '';
+      const dateFrom = req.query.from || '';
+      const dateTo = req.query.to || '';
+
+      let whereClause = 'WHERE 1=1';
+      const params = [];
+      let paramIdx = 1;
+
+      if (dateFrom) {
+        whereClause += ' AND a.attended_at >= $' + paramIdx + '::date';
+        params.push(dateFrom);
+        paramIdx++;
+      }
+      if (dateTo) {
+        whereClause += ' AND a.attended_at < ($' + paramIdx + '::date + INTERVAL \'1 day\')';
+        params.push(dateTo);
+        paramIdx++;
+      }
+      if (search) {
+        whereClause += ' AND (u.name ILIKE $' + paramIdx + ' OR u.email ILIKE $' + paramIdx + ' OR u.phone ILIKE $' + paramIdx + ')';
+        params.push('%' + search + '%');
+        paramIdx++;
+      }
+
+      const countQuery = 'SELECT COUNT(*) FROM attendance a LEFT JOIN users u ON a.user_id = u.id ' + whereClause;
+      const countResult = await pool.query(countQuery, params);
+      const totalCount = parseInt(countResult.rows[0].count);
+
+      const dataQuery = `
+        SELECT a.id, a.attended_at, a.note, a.zoom_meeting_uuid,
+          u.name as user_name, u.email as user_email, u.phone as user_phone,
+          cp.total_classes, cp.remaining_classes as pass_remaining, cp.status as pass_status
+        FROM attendance a
+        LEFT JOIN users u ON a.user_id = u.id
+        LEFT JOIN class_passes cp ON a.class_pass_id = cp.id
+        ${whereClause}
+        ORDER BY a.attended_at DESC
+        LIMIT $${paramIdx} OFFSET $${paramIdx + 1}
+      `;
+      params.push(limit, offset);
+
+      const result = await pool.query(dataQuery, params);
+
+      res.json({
+        attendance: result.rows,
+        pagination: { page, limit, total: totalCount, totalPages: Math.ceil(totalCount / limit) }
+      });
+    } catch (err) {
+      console.error('Attendance history error:', err);
+      res.status(500).json({ error: '수업 이력 조회 오류: ' + err.message });
+    }
+  });
+
   // ===================== ADMIN: 메시지 발송 이력 =====================
 
   app.get('/api/admin/message-history', requireDB, requireAdmin, async (req, res) => {
