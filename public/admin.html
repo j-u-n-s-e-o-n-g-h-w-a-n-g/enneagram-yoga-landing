@@ -143,6 +143,7 @@ footer p{font-size:0.7rem;color:#999;font-weight:300}
 <button class="tab" onclick="switchTab('members')">회원 관리</button>
 <button class="tab" onclick="switchTab('applications')">신청 관리</button>
 <button class="tab" onclick="switchTab('bulk-sms')">단체 SMS</button>
+<button class="tab" onclick="switchTab('messages')">메시지 이력</button>
 </div>
 <div class="tab-content active" id="tab-payments">
 <div style="margin-bottom:16px"><input type="text" id="searchPayments" placeholder="이름, 전화번호, 입금자명으로 검색..." style="width:100%;padding:10px;border:1px solid var(--border);font-family:'Noto Serif KR',serif;font-size:0.82rem;outline:none" onkeyup="if(event.key==='Enter')searchPaymentsFn()"><button class="action-btn small" style="margin-top:8px" onclick="searchPaymentsFn()">검색</button></div>
@@ -199,6 +200,28 @@ footer p{font-size:0.7rem;color:#999;font-weight:300}
 <div style="font-size:0.85rem;font-weight:400;margin-bottom:8px">발송 결과</div>
 <div id="bulkResultContent"></div>
 </div>
+</div>
+</div>
+<div class="tab-content" id="tab-messages">
+<div style="display:flex;gap:12px;align-items:flex-end;margin-bottom:16px;flex-wrap:wrap">
+<div class="date-filter" style="margin-bottom:0">
+<label style="font-size:0.78rem;white-space:nowrap">기간:</label>
+<input type="date" id="msgDateFrom">
+<span style="font-size:0.78rem">~</span>
+<input type="date" id="msgDateTo">
+</div>
+<div class="filter-row" style="margin-bottom:0">
+<button class="filter-btn active" onclick="filterMessages('all', this)">전체</button>
+<button class="filter-btn" onclick="filterMessages('sms', this)">SMS</button>
+<button class="filter-btn" onclick="filterMessages('email', this)">이메일</button>
+<button class="filter-btn" onclick="filterMessages('cashreceipt', this)">현금영수증</button>
+</div>
+<div style="flex:1;min-width:180px"><input type="text" id="searchMessages" placeholder="이름, 전화번호, 이메일로 검색..." style="width:100%;padding:8px 10px;border:1px solid var(--border);font-family:'Noto Serif KR',serif;font-size:0.8rem;outline:none" onkeyup="if(event.key==='Enter')loadMessageHistory()"></div>
+<button class="action-btn small" onclick="loadMessageHistory()">검색</button>
+</div>
+<div class="section-box">
+<div id="messageList"><div class="empty-state">메시지 이력을 조회하려면 위에서 기간을 선택하고 검색하세요</div></div>
+<div id="messagePagination"></div>
 </div>
 </div>
 
@@ -441,7 +464,7 @@ async function loadApplications(status){
       const safeN=escapeHtml(a.name).replace(/'/g,"\\'");
       const safeE=escapeHtml(a.email).replace(/'/g,"\\'");
       const safeP=escapeHtml(a.phone||'').replace(/'/g,"\\'");
-      html+='<tr><td>'+date+'</td><td>'+escapeHtml(a.name)+'</td><td>'+escapeHtml(a.email)+'</td><td>'+escapeHtml(a.phone)+'</td><td><span class="badge '+badge+'">'+label+'</span></td><td><button class="action-btn small" onclick="event.stopPropagation();openAppEdit('+a.id+',\''+safeN+'\',\''+safeE+'\',\''+safeP+'\')">수정</button> <button class="action-btn small danger" onclick="event.stopPropagation();deleteApplication('+a.id+',\''+safeN+'\')">삭제</button></td></tr>';
+      html+='<tr><td>'+date+'</td><td>'+escapeHtml(a.name)+'</td><td>'+escapeHtml(a.email)+'</td><td>'+escapeHtml(a.phone)+'</td><td><span class="badge '+badge+'">'+label+'</span></td><td><button class="action-btn small" onclick="event.stopPropagation();openAppEdit('+a.id+',\''+safeN+'\'  ,\''+safeE+'\'  ,\''+safeP+'\' )">수정</button> <button class="action-btn small danger" onclick="event.stopPropagation();deleteApplication('+a.id+',\''+safeN+'\' )">삭제</button></td></tr>';
     });
     html+='</tbody></table>';
     document.getElementById('applicationList').innerHTML=html;
@@ -1059,6 +1082,109 @@ async function sendBulkSms() {
     console.error('Bulk SMS error:', err);
     showToast('발송 중 오류가 발생했습니다', 'error');
   }
+}
+
+// ===================== 메시지 이력 =====================
+let msgPage = 1;
+let currentMsgType = 'all';
+const MSG_PAGE_SIZE = 30;
+
+async function loadMessageHistory(page) {
+  if (page !== undefined) msgPage = page;
+  showLoading('messageList');
+  try {
+    const dateFrom = document.getElementById('msgDateFrom').value;
+    const dateTo = document.getElementById('msgDateTo').value;
+    const search = document.getElementById('searchMessages').value;
+    let url = '/api/admin/message-history?page=' + msgPage + '&limit=' + MSG_PAGE_SIZE + '&type=' + currentMsgType;
+    if (dateFrom) url += '&from=' + dateFrom;
+    if (dateTo) url += '&to=' + dateTo;
+    if (search) url += '&search=' + encodeURIComponent(search);
+
+    const res = await apiFetch(url);
+    const data = await res.json();
+    const messages = data.messages || [];
+    const total = (data.pagination && data.pagination.total) || 0;
+    const totalPages = Math.ceil(total / MSG_PAGE_SIZE) || 1;
+
+    if (messages.length === 0) {
+      document.getElementById('messageList').innerHTML = '<div class="empty-state">메시지 이력이 없습니다</div>';
+      document.getElementById('messagePagination').innerHTML = '';
+      return;
+    }
+
+    let html = '<div style="margin-bottom:12px;font-size:0.78rem;color:#888">총 ' + total + '건</div>';
+    html += '<table><thead><tr><th>날짜</th><th>수신자</th><th>연락처</th><th>유형</th><th>분류</th><th>상태</th><th>발송방식</th></tr></thead><tbody>';
+
+    messages.forEach(function(m) {
+      var dt = new Date(m.created_at);
+      var date = dt.toLocaleDateString('ko-KR');
+      var time = dt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+
+      // 유형 표시
+      var typeIcons = { sms: '📱', email: '📧', cashreceipt: '🧾' };
+      var typeLabels = { sms: 'SMS', email: '이메일', cashreceipt: '현금영수증' };
+      var typeIcon = typeIcons[m.type] || '📨';
+      var typeLabel = typeLabels[m.type] || m.type;
+
+      // 분류 (sub_type)
+      var subTypeLabels = {
+        'sms': 'SMS',
+        'email': '이메일',
+        'cashreceipt': '현금영수증',
+        'reminder': '수업 리마인더',
+        'journaling_first': '저널링(첫 수업)',
+        'journaling_recurring': '저널링(반복)',
+        'care_expiring_7d': '만료 7일 전',
+        'care_inactive_7d': '미참석 안내',
+        'care_renewal_1left': '잔여 1회'
+      };
+      var subLabel = subTypeLabels[m.sub_type] || m.sub_type || '-';
+      // detail에서 source 확인
+      if (m.detail) {
+        var d = typeof m.detail === 'string' ? JSON.parse(m.detail) : m.detail;
+        if (d.source === 'journaling') subLabel = '저널링(' + (d.sms_type || '') + ')';
+        if (d.source === 'care') subLabel = '케어(' + (d.sms_type || '') + ')';
+        if (d.bulk) subLabel += ' [단체]';
+      }
+
+      // 상태
+      var statusBadge = m.status === 'success'
+        ? '<span class="badge badge-confirmed">성공</span>'
+        : '<span class="badge badge-expired">실패</span>';
+
+      // 발송 방식
+      var methodLabels = { auto: '자동', manual: '수동', bulk: '단체' };
+      var methodLabel = methodLabels[m.send_method] || m.send_method || '-';
+
+      html += '<tr>';
+      html += '<td style="white-space:nowrap">' + date + '<br><span style="font-size:0.7rem;color:#999">' + time + '</span></td>';
+      html += '<td>' + escapeHtml(m.user_name || '-') + '</td>';
+      html += '<td style="font-size:0.76rem">' + escapeHtml(m.type === 'email' ? (m.user_email || '-') : (m.user_phone || '-')) + '</td>';
+      html += '<td>' + typeIcon + ' ' + typeLabel + '</td>';
+      html += '<td style="font-size:0.76rem">' + escapeHtml(subLabel) + '</td>';
+      html += '<td>' + statusBadge + '</td>';
+      html += '<td style="font-size:0.76rem">' + methodLabel + '</td>';
+      html += '</tr>';
+    });
+
+    html += '</tbody></table>';
+    document.getElementById('messageList').innerHTML = html;
+    renderPagination('messagePagination', msgPage, totalPages, 'goMsgPage');
+  } catch (err) {
+    console.error('Message history error:', err);
+    document.getElementById('messageList').innerHTML = '<div class="empty-state">조회 중 오류가 발생했습니다</div>';
+  }
+}
+
+function goMsgPage(page) { loadMessageHistory(page); }
+
+function filterMessages(type, btn) {
+  currentMsgType = type;
+  document.querySelectorAll('#tab-messages .filter-btn').forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+  msgPage = 1;
+  loadMessageHistory();
 }
 
 checkAuth();
