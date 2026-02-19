@@ -820,32 +820,45 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
       const dateFrom = req.query.from || '';
       const dateTo = req.query.to || '';
 
-      // 파라미터를 미리 고정 위치에 배치: $1=dateFrom, $2=dateTo, $3=search
-      // 사용하지 않는 경우에도 더미값을 넣어 인덱스를 안정적으로 유지
-      const params = [
-        dateFrom || '1970-01-01',   // $1
-        dateTo || '2099-12-31',     // $2
-        search ? '%' + search + '%' : '%NOMATCH_PLACEHOLDER%'  // $3
-      ];
+      // 동적 파라미터 구성
+      const params = [];
+      let paramIdx = 1;
 
-      // notification_log 기본 쿼리
-      let nlWhere = 'WHERE nl.created_at >= $1::date AND nl.created_at < ($2::date + INTERVAL \'1 day\')';
+      // dateFrom
+      const dateFromParam = '$' + paramIdx;
+      params.push(dateFrom || '1970-01-01');
+      paramIdx++;
+
+      // dateTo
+      const dateToParam = '$' + paramIdx;
+      params.push(dateTo || '2099-12-31');
+      paramIdx++;
+
+      // search (선택적)
+      let searchParam = null;
+      if (search) {
+        searchParam = '$' + paramIdx;
+        params.push('%' + search + '%');
+        paramIdx++;
+      }
+
+      // notification_log 쿼리
+      let nlWhere = `WHERE nl.created_at >= ${dateFromParam}::date AND nl.created_at < (${dateToParam}::date + INTERVAL '1 day')`;
       if (typeFilter === 'sms') nlWhere += " AND nl.type = 'sms'";
       else if (typeFilter === 'email') nlWhere += " AND nl.type = 'email'";
       else if (typeFilter === 'cashreceipt') nlWhere += " AND nl.type = 'cashreceipt'";
-      // journaling/care 전용 필터일 때는 notification_log에서 결과 없도록
       else if (typeFilter === 'journaling' || typeFilter === 'care') nlWhere += " AND 1=0";
 
-      if (search) {
-        nlWhere += ' AND (u.name ILIKE $3 OR u.phone ILIKE $3 OR u.email ILIKE $3)';
+      if (searchParam) {
+        nlWhere += ` AND (u.name ILIKE ${searchParam} OR u.phone ILIKE ${searchParam} OR u.email ILIKE ${searchParam})`;
       }
 
       const nlQuery = `
         SELECT nl.id, nl.created_at, nl.type, nl.status, nl.detail,
           u.name as user_name, u.phone as user_phone, u.email as user_email,
           CASE
-            WHEN nl.detail::text LIKE '%"bulk":true%' THEN 'bulk'
-            WHEN nl.detail::text LIKE '%"manual":true%' THEN 'manual'
+            WHEN nl.detail IS NOT NULL AND CAST(nl.detail AS text) LIKE '%"bulk":true%' THEN 'bulk'
+            WHEN nl.detail IS NOT NULL AND CAST(nl.detail AS text) LIKE '%"manual":true%' THEN 'manual'
             ELSE 'auto'
           END as send_method,
           COALESCE(nl.detail->>'sms_type', nl.type) as sub_type
@@ -857,12 +870,12 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
       // journaling_sms_log UNION
       let journalingUnion = '';
       if (typeFilter === 'all' || typeFilter === 'sms' || typeFilter === 'journaling') {
-        let jWhere = 'WHERE jsl.sent_at >= $1::date AND jsl.sent_at < ($2::date + INTERVAL \'1 day\')';
-        if (search) jWhere += ' AND (u2.name ILIKE $3 OR u2.phone ILIKE $3)';
+        let jWhere = `WHERE jsl.sent_at >= ${dateFromParam}::date AND jsl.sent_at < (${dateToParam}::date + INTERVAL '1 day')`;
+        if (searchParam) jWhere += ` AND (u2.name ILIKE ${searchParam} OR u2.phone ILIKE ${searchParam})`;
         journalingUnion = `
           UNION ALL
           SELECT jsl.id + 1000000 as id, jsl.sent_at as created_at,
-            'sms' as type, 'success' as status,
+            'sms'::varchar as type, 'success'::varchar as status,
             json_build_object('sms_type', jsl.send_type, 'source', 'journaling')::jsonb as detail,
             u2.name as user_name, u2.phone as user_phone, u2.email as user_email,
             'auto' as send_method, 'journaling_' || jsl.send_type as sub_type
@@ -875,12 +888,12 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
       // care_sms_log UNION
       let careUnion = '';
       if (typeFilter === 'all' || typeFilter === 'sms' || typeFilter === 'care') {
-        let cWhere = 'WHERE csl.sent_at >= $1::date AND csl.sent_at < ($2::date + INTERVAL \'1 day\')';
-        if (search) cWhere += ' AND (u3.name ILIKE $3 OR u3.phone ILIKE $3)';
+        let cWhere = `WHERE csl.sent_at >= ${dateFromParam}::date AND csl.sent_at < (${dateToParam}::date + INTERVAL '1 day')`;
+        if (searchParam) cWhere += ` AND (u3.name ILIKE ${searchParam} OR u3.phone ILIKE ${searchParam})`;
         careUnion = `
           UNION ALL
           SELECT csl.id + 2000000 as id, csl.sent_at as created_at,
-            'sms' as type, 'success' as status,
+            'sms'::varchar as type, 'success'::varchar as status,
             json_build_object('sms_type', csl.sms_type, 'source', 'care')::jsonb as detail,
             u3.name as user_name, u3.phone as user_phone, u3.email as user_email,
             'auto' as send_method, 'care_' || csl.sms_type as sub_type
@@ -890,6 +903,14 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
         `;
       }
 
+      // limit, offset 파라미터
+      const limitParam = '$' + paramIdx;
+      params.push(limit);
+      paramIdx++;
+      const offsetParam = '$' + paramIdx;
+      params.push(offset);
+      paramIdx++;
+
       const fullQuery = `
         WITH combined AS (
           ${nlQuery}
@@ -898,10 +919,11 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
         )
         SELECT * FROM combined
         ORDER BY created_at DESC
-        LIMIT $4 OFFSET $5
+        LIMIT ${limitParam} OFFSET ${offsetParam}
       `;
-      params.push(limit, offset); // $4, $5
 
+      // count 쿼리용 params (limit, offset 제외)
+      const countParams = params.slice(0, params.length - 2);
       const countQuery = `
         WITH combined AS (
           ${nlQuery}
@@ -910,7 +932,6 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
         )
         SELECT COUNT(*) FROM combined
       `;
-      const countParams = params.slice(0, 3); // $1~$3만
 
       const [result, countResult] = await Promise.all([
         pool.query(fullQuery, params),
@@ -924,7 +945,7 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
         pagination: { page, limit, total: totalCount, totalPages: Math.ceil(totalCount / limit) }
       });
     } catch (err) {
-      console.error('Message history error:', err.message);
+      console.error('Message history error:', err.message, err.stack);
       res.status(500).json({ error: '메시지 이력 조회 오류: ' + err.message });
     }
   });
