@@ -220,7 +220,7 @@ footer p{font-size:0.7rem;color:#999;font-weight:300}
 <button class="action-btn small" onclick="loadMessageHistory()">검색</button>
 </div>
 <div class="section-box">
-<div id="messageList"><div class="empty-state">메시지 이력을 조회하려면 위에서 기간을 선택하고 검색하세요</div></div>
+<div id="messageList"><div class="loading">불러오는 중</div></div>
 <div id="messagePagination"></div>
 </div>
 </div>
@@ -464,7 +464,7 @@ async function loadApplications(status){
       const safeN=escapeHtml(a.name).replace(/'/g,"\\'");
       const safeE=escapeHtml(a.email).replace(/'/g,"\\'");
       const safeP=escapeHtml(a.phone||'').replace(/'/g,"\\'");
-      html+='<tr><td>'+date+'</td><td>'+escapeHtml(a.name)+'</td><td>'+escapeHtml(a.email)+'</td><td>'+escapeHtml(a.phone)+'</td><td><span class="badge '+badge+'">'+label+'</span></td><td><button class="action-btn small" onclick="event.stopPropagation();openAppEdit('+a.id+',\''+safeN+'\'  ,\''+safeE+'\'  ,\''+safeP+'\' )">수정</button> <button class="action-btn small danger" onclick="event.stopPropagation();deleteApplication('+a.id+',\''+safeN+'\' )">삭제</button></td></tr>';
+      html+='<tr><td>'+date+'</td><td>'+escapeHtml(a.name)+'</td><td>'+escapeHtml(a.email)+'</td><td>'+escapeHtml(a.phone)+'</td><td><span class="badge '+badge+'">'+label+'</span></td><td><button class="action-btn small" onclick="event.stopPropagation();openAppEdit('+a.id+',\''+safeN+'\',\''+safeE+'\',\''+safeP+'\')">수정</button> <button class="action-btn small danger" onclick="event.stopPropagation();deleteApplication('+a.id+',\''+safeN+'\')">삭제</button></td></tr>';
     });
     html+='</tbody></table>';
     document.getElementById('applicationList').innerHTML=html;
@@ -758,6 +758,8 @@ function switchTab(tab) {
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
   event.target.classList.add('active');
   document.getElementById('tab-' + tab).classList.add('active');
+  if (tab === 'messages') { loadMessageHistory(1); }
+  if (tab === 'bulk-sms') { loadBulkTargets(currentBulkType); }
 }
 
 function filterPayments(status, btn) {
@@ -1102,7 +1104,19 @@ async function loadMessageHistory(page) {
     if (search) url += '&search=' + encodeURIComponent(search);
 
     const res = await apiFetch(url);
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error('Message history API error:', res.status, errText);
+      document.getElementById('messageList').innerHTML = '<div class="empty-state">메시지 이력을 불러올 수 없습니다 (HTTP ' + res.status + ')</div>';
+      document.getElementById('messagePagination').innerHTML = '';
+      return;
+    }
     const data = await res.json();
+    if (data.error) {
+      document.getElementById('messageList').innerHTML = '<div class="empty-state">' + escapeHtml(data.error) + '</div>';
+      document.getElementById('messagePagination').innerHTML = '';
+      return;
+    }
     const messages = data.messages || [];
     const total = (data.pagination && data.pagination.total) || 0;
     const totalPages = Math.ceil(total / MSG_PAGE_SIZE) || 1;

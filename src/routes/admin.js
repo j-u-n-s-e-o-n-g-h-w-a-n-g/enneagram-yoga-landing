@@ -554,6 +554,7 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
       let result;
 
       if (type === 'active') {
+        // 유효한 이용권 보유 회원 (잔여 > 0 + 만료 안됨)
         result = await pool.query(`
           SELECT u.id, u.name, u.phone, u.email,
             COALESCE(SUM(cp.remaining_classes), 0) as remaining_classes
@@ -567,6 +568,7 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
           ORDER BY u.name
         `);
       } else {
+        // 유효 이용권 없는 회원
         result = await pool.query(`
           SELECT u.id, u.name, u.phone, u.email, 0 as remaining_classes
           FROM users u
@@ -601,6 +603,7 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
         return res.status(400).json({ error: '메시지는 2000자 이하로 입력해주세요' });
       }
 
+      // 대상 회원 조회
       let members;
       if (type === 'active') {
         const result = await pool.query(`
@@ -633,6 +636,7 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
         return res.status(400).json({ error: '발송 대상이 없습니다' });
       }
 
+      // Send in batches of 5 for concurrency control
       let sent = 0;
       let failed = 0;
       const details = [];
@@ -679,142 +683,97 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
       const dateFrom = req.query.from || '';
       const dateTo = req.query.to || '';
 
-      let unionQuery = `
-        SELECT
-          nl.id,
-          nl.created_at,
-          nl.type,
-          nl.status,
-          nl.detail,
-          u.name as user_name,
-          u.phone as user_phone,
-          u.email as user_email,
+      // 파라미터를 미리 고정 위치에 배치: $1=dateFrom, $2=dateTo, $3=search
+      // 사용하지 않는 경우에도 더미값을 넣어 인덱스를 안정적으로 유지
+      const params = [
+        dateFrom || '1970-01-01',   // $1
+        dateTo || '2099-12-31',     // $2
+        search ? '%' + search + '%' : '%NOMATCH_PLACEHOLDER%'  // $3
+      ];
+
+      // notification_log 기본 쿼리
+      let nlWhere = 'WHERE nl.created_at >= $1::date AND nl.created_at < ($2::date + INTERVAL \'1 day\')';
+      if (typeFilter === 'sms') nlWhere += " AND nl.type = 'sms'";
+      else if (typeFilter === 'email') nlWhere += " AND nl.type = 'email'";
+      else if (typeFilter === 'cashreceipt') nlWhere += " AND nl.type = 'cashreceipt'";
+      // journaling/care 전용 필터일 때는 notification_log에서 결과 없도록
+      else if (typeFilter === 'journaling' || typeFilter === 'care') nlWhere += " AND 1=0";
+
+      if (search) {
+        nlWhere += ' AND (u.name ILIKE $3 OR u.phone ILIKE $3 OR u.email ILIKE $3)';
+      }
+
+      const nlQuery = `
+        SELECT nl.id, nl.created_at, nl.type, nl.status, nl.detail,
+          u.name as user_name, u.phone as user_phone, u.email as user_email,
           CASE
             WHEN nl.detail::text LIKE '%"bulk":true%' THEN 'bulk'
             WHEN nl.detail::text LIKE '%"manual":true%' THEN 'manual'
             ELSE 'auto'
           END as send_method,
-          COALESCE(
-            CASE
-              WHEN nl.detail->>'sms_type' IS NOT NULL THEN nl.detail->>'sms_type'
-              ELSE nl.type
-            END, nl.type
-          ) as sub_type
+          COALESCE(nl.detail->>'sms_type', nl.type) as sub_type
         FROM notification_log nl
         LEFT JOIN users u ON nl.user_id = u.id
-        WHERE 1=1
+        ${nlWhere}
       `;
-      const params = [];
-      let paramIdx = 1;
 
-      if (dateFrom) {
-        unionQuery += ' AND nl.created_at >= $' + paramIdx + '::date';
-        params.push(dateFrom);
-        paramIdx++;
-      }
-      if (dateTo) {
-        unionQuery += ' AND nl.created_at < ($' + paramIdx + '::date + INTERVAL \'1 day\')';
-        params.push(dateTo);
-        paramIdx++;
-      }
-
-      if (typeFilter === 'sms') {
-        unionQuery += " AND nl.type = 'sms'";
-      } else if (typeFilter === 'email') {
-        unionQuery += " AND nl.type = 'email'";
-      } else if (typeFilter === 'cashreceipt') {
-        unionQuery += " AND nl.type = 'cashreceipt'";
-      }
-
-      if (search) {
-        unionQuery += ' AND (u.name ILIKE $' + paramIdx + ' OR u.phone ILIKE $' + paramIdx + ' OR u.email ILIKE $' + paramIdx + ')';
-        params.push('%' + search + '%');
-        paramIdx++;
-      }
-
+      // journaling_sms_log UNION
       let journalingUnion = '';
-      if (typeFilter === 'all' || typeFilter === 'journaling') {
+      if (typeFilter === 'all' || typeFilter === 'sms' || typeFilter === 'journaling') {
+        let jWhere = 'WHERE jsl.sent_at >= $1::date AND jsl.sent_at < ($2::date + INTERVAL \'1 day\')';
+        if (search) jWhere += ' AND (u2.name ILIKE $3 OR u2.phone ILIKE $3)';
         journalingUnion = `
           UNION ALL
-          SELECT
-            jsl.id + 1000000 as id,
-            jsl.sent_at as created_at,
-            'sms' as type,
-            'success' as status,
+          SELECT jsl.id + 1000000 as id, jsl.sent_at as created_at,
+            'sms' as type, 'success' as status,
             json_build_object('sms_type', jsl.send_type, 'source', 'journaling')::jsonb as detail,
-            u2.name as user_name,
-            u2.phone as user_phone,
-            u2.email as user_email,
-            'auto' as send_method,
-            'journaling_' || jsl.send_type as sub_type
+            u2.name as user_name, u2.phone as user_phone, u2.email as user_email,
+            'auto' as send_method, 'journaling_' || jsl.send_type as sub_type
           FROM journaling_sms_log jsl
           LEFT JOIN users u2 ON jsl.user_id = u2.id
-          WHERE 1=1
+          ${jWhere}
         `;
-        if (dateFrom) {
-          journalingUnion += ' AND jsl.sent_at >= $' + (params.indexOf(dateFrom) + 1) + '::date';
-        }
-        if (dateTo) {
-          journalingUnion += ' AND jsl.sent_at < ($' + (params.indexOf(dateTo) + 1) + '::date + INTERVAL \'1 day\')';
-        }
-        if (search) {
-          const searchParamIdx = params.indexOf('%' + search + '%') + 1;
-          journalingUnion += ' AND (u2.name ILIKE $' + searchParamIdx + ' OR u2.phone ILIKE $' + searchParamIdx + ')';
-        }
       }
 
+      // care_sms_log UNION
       let careUnion = '';
-      if (typeFilter === 'all' || typeFilter === 'care') {
+      if (typeFilter === 'all' || typeFilter === 'sms' || typeFilter === 'care') {
+        let cWhere = 'WHERE csl.sent_at >= $1::date AND csl.sent_at < ($2::date + INTERVAL \'1 day\')';
+        if (search) cWhere += ' AND (u3.name ILIKE $3 OR u3.phone ILIKE $3)';
         careUnion = `
           UNION ALL
-          SELECT
-            csl.id + 2000000 as id,
-            csl.sent_at as created_at,
-            'sms' as type,
-            'success' as status,
+          SELECT csl.id + 2000000 as id, csl.sent_at as created_at,
+            'sms' as type, 'success' as status,
             json_build_object('sms_type', csl.sms_type, 'source', 'care')::jsonb as detail,
-            u3.name as user_name,
-            u3.phone as user_phone,
-            u3.email as user_email,
-            'auto' as send_method,
-            'care_' || csl.sms_type as sub_type
+            u3.name as user_name, u3.phone as user_phone, u3.email as user_email,
+            'auto' as send_method, 'care_' || csl.sms_type as sub_type
           FROM care_sms_log csl
           LEFT JOIN users u3 ON csl.user_id = u3.id
-          WHERE 1=1
+          ${cWhere}
         `;
-        if (dateFrom) {
-          careUnion += ' AND csl.sent_at >= $' + (params.indexOf(dateFrom) + 1) + '::date';
-        }
-        if (dateTo) {
-          careUnion += ' AND csl.sent_at < ($' + (params.indexOf(dateTo) + 1) + '::date + INTERVAL \'1 day\')';
-        }
-        if (search) {
-          const searchParamIdx = params.indexOf('%' + search + '%') + 1;
-          careUnion += ' AND (u3.name ILIKE $' + searchParamIdx + ' OR u3.phone ILIKE $' + searchParamIdx + ')';
-        }
       }
 
       const fullQuery = `
         WITH combined AS (
-          ${unionQuery}
+          ${nlQuery}
           ${journalingUnion}
           ${careUnion}
         )
         SELECT * FROM combined
         ORDER BY created_at DESC
-        LIMIT $${paramIdx} OFFSET $${paramIdx + 1}
+        LIMIT $4 OFFSET $5
       `;
-      params.push(limit, offset);
+      params.push(limit, offset); // $4, $5
 
       const countQuery = `
         WITH combined AS (
-          ${unionQuery}
+          ${nlQuery}
           ${journalingUnion}
           ${careUnion}
         )
         SELECT COUNT(*) FROM combined
       `;
-      const countParams = params.slice(0, -2);
+      const countParams = params.slice(0, 3); // $1~$3만
 
       const [result, countResult] = await Promise.all([
         pool.query(fullQuery, params),
@@ -828,8 +787,8 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
         pagination: { page, limit, total: totalCount, totalPages: Math.ceil(totalCount / limit) }
       });
     } catch (err) {
-      console.error('Message history error:', err);
-      res.status(500).json({ error: '서버 오류' });
+      console.error('Message history error:', err.message);
+      res.status(500).json({ error: '메시지 이력 조회 오류: ' + err.message });
     }
   });
 };
