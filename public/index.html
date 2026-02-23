@@ -15,7 +15,10 @@
 <meta name="twitter:title" content="요가코치 황준성">
 <meta name="twitter:description" content="모든 것에서 아름다움을 발견할 수 있도록">
 <meta name="twitter:image" content="https://junseonghwang.com/images/signature.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"LocalBusiness","name":"에니어그램 클럽","description":"에니어그램에 기반한 요가 수련을 통해 모든 것에서 아름다움을 발견하는 여정","url":"https://junseonghwang.com","telephone":"070-7954-8182","email":"junseong@junseonghwang.com","address":{"@type":"PostalAddress","addressCountry":"KR","addressRegion":"제주도","addressLocality":"서귀포시","streetAddress":"서호중앙로 55 유포리아 C동 319호"},"founder":{"@type":"Person","name":"황준성","jobTitle":"요가코치"},"makesOffer":[{"@type":"Offer","name":"Core Membership - 데일리 요가 클래스","price":"99000","priceCurrency":"KRW","description":"12회 이용권 (유효기간 3개월)"},{"@type":"Offer","name":"Premium Membership - 6주 집중수련 코스","price":"3300000","priceCurrency":"KRW","description":"소규모 그룹 집중수련 (6명)"}]}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Noto+Serif+KR:wght@200;300;400;500;600&display=swap" rel="stylesheet">
@@ -169,15 +172,49 @@ footer p{font-size:0.72rem;color:#999;font-weight:300}
 .premium-apply-section{background:var(--section-bg)}
 .vip-section{background:var(--bg)}
 .vip-apply-section{background:var(--section-bg)}
-@media(max-width:768px){nav{padding:0 24px}nav .inner{padding:0}nav ul{display:none}.hamburger{display:block}nav .logo img{height:28px}.hero h1{font-size:2.8rem}.about-grid,.class-details,.membership-cards{grid-template-columns:1fr}section{padding:80px 24px}.section-title,.section-title-kr,.section-title-bold{font-size:2rem}.modal{padding:40px 28px}.privacy-modal{padding:36px 24px}.terms-modal{padding:36px 24px}footer{padding:60px 24px}footer .logo-img{height:24px}.sns-icons{grid-template-columns:repeat(3,36px);gap:14px}.sns-icons a{width:36px;height:36px}.sns-icons a svg{width:16px;height:16px}.m-card{padding:36px 24px}}
+/* Nav active */
+nav ul li a.nav-active{color:var(--accent)}
+.mobile-menu ul li a.nav-active{color:var(--accent)}
+/* Fade-in animation */
+.fade-in{opacity:0;transform:translateY(24px);transition:opacity 0.7s ease,transform 0.7s ease}
+.fade-in.visible{opacity:1;transform:translateY(0)}
+/* Form validation */
+.form-group input.input-error{border-bottom-color:#c0392b}
+.form-group input.input-valid{border-bottom-color:var(--accent)}
+.form-group .field-error{font-size:0.72rem;color:#c0392b;margin-top:6px;font-weight:300;display:none}
+.form-group .field-error.show{display:block}
+/* Testimonial */
+.testimonial{background:var(--section-bg)}
+.testimonial-grid{display:grid;grid-template-columns:1fr 1fr;gap:60px;max-width:900px;margin:50px auto 0}
+.testimonial-item{text-align:left;padding:30px 0;border-top:1px solid var(--border)}
+.testimonial-item .t-quote{font-size:0.88rem;font-weight:300;line-height:2.2;color:#555;font-style:italic;margin-bottom:16px}
+.testimonial-item .t-author{font-size:0.78rem;font-weight:400;color:var(--accent);letter-spacing:0.05em}
+/* Credentials */
+.credentials{max-width:900px;margin:60px auto 0;display:grid;grid-template-columns:1fr 1fr;gap:40px}
+.cert-item{text-align:center}
+.cert-item img{width:100%;max-width:360px;border:1px solid var(--border)}
+.cert-item .cert-label{font-size:0.75rem;font-weight:300;color:#888;margin-top:12px;line-height:1.6}
+@media(max-width:768px){nav{padding:0 24px}nav .inner{padding:0}nav ul{display:none}.hamburger{display:block}nav .logo img{height:28px}.hero h1{font-size:2.8rem}.about-grid,.class-details,.membership-cards{grid-template-columns:1fr}section{padding:80px 24px}.section-title,.section-title-kr,.section-title-bold{font-size:2rem}.modal{padding:40px 28px}.privacy-modal{padding:36px 24px}.terms-modal{padding:36px 24px}footer{padding:60px 24px}footer .logo-img{height:24px}.sns-icons{grid-template-columns:repeat(3,36px);gap:14px}.sns-icons a{width:36px;height:36px}.sns-icons a svg{width:16px;height:16px}.m-card{padding:36px 24px}.testimonial-grid,.credentials{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 <nav><div class="inner"><a href="#" class="logo" onclick="event.preventDefault();window.scrollTo({top:0,behavior:'smooth'})"><img src="/images/signature.png" alt="Junseong Hwang"></a><ul><li><a href="#about">About</a></li><li><a href="#enneagram">The 9 Class Goals</a></li><li><a href="#membership">Membership</a></li><li id="authLink"><a href="/login" class="nav-auth">Sign In</a></li></ul><button class="hamburger" id="hamburgerBtn" onclick="toggleMenu()"><span></span><span></span><span></span></button></div></nav>
 <div class="mobile-menu" id="mobileMenu"><ul><li><a href="#about" onclick="toggleMenu()">About</a></li><li><a href="#enneagram" onclick="toggleMenu()">The 9 Class Goals</a></li><li><a href="#membership" onclick="toggleMenu()">Membership</a></li><li id="authLinkMobile"><a href="/login" class="nav-auth">Sign In</a></li></ul></div>
 <section class="hero"><div class="hero-content"><p class="sub eng">Enneagram × Yoga</p><h1 class="eng">Beauty Perception<br>YOGA</h1><p class="kr-title">모든 것에서 아름다움을<br>발견할 수 있도록 수련합니다.</p><div class="arrow-down">↓</div></div></section>
-<section class="about" id="about"><div class="section-inner"><p class="section-label eng">About</p><h2 class="section-title-bold">요가코치<br>황준성</h2><p class="section-text">에니어그램을 통해 인간의 정신적 메커니즘을 이해하게 되었고, 요가를 통해 인간의 신체적 메커니즘을 이해하게 되었습니다. 정신과 신체에 대한 메커니즘을 이해하게 되니 모든 것에서 아름다움을 발견하는 순간들이 많아지더군요. 세상은 여전히 그대로지만 그 세상을 바라보는 저의 시선이 그토록 아름답게 바뀐 것이죠. 이런 경험을 나누는 것이 제 인생의 단순명료한 사명입니다.</p><div class="about-grid"><div class="about-item"><div class="num eng">01</div><h3>에니어그램의 지혜</h3><p>에니어그램은 인간의 정신적 메커니즘을 이해하는데 유용할 뿐만 아니라 우주의 법칙을 이해하고 적용하는데도 도움이 됩니다. 그래서 에니어그램의 3가지 도형인 원형, 삼각형, 헥사드와 9가지 숫자가 의미하는 각 상징들을 통해 삶의 지혜를 전합니다.</p></div><div class="about-item"><div class="num eng">02</div><h3>요가의 과학</h3><p>요가는 인간의 신체적 메커니즘을 이해하는데 유용할 뿐만 아니라 호흡계, 골격계, 근육계, 순환계, 소화계, 신경계, 내분비계 등의 인체 시스템에 대한 올바른 균형을 회복하는데도 도움이 됩니다. 그래서 요가의 자세를 통해 움직임의 과학을 전합니다.</p></div></div></div></section>
+<section class="about" id="about"><div class="section-inner"><p class="section-label eng">About</p><h2 class="section-title-bold">요가코치<br>황준성</h2><p class="section-text">에니어그램을 통해 인간의 정신적 메커니즘을 이해하게 되었고, 요가를 통해 인간의 신체적 메커니즘을 이해하게 되었습니다. 정신과 신체에 대한 메커니즘을 이해하게 되니 모든 것에서 아름다움을 발견하는 순간들이 많아지더군요. 세상은 여전히 그대로지만 그 세상을 바라보는 저의 시선이 그토록 아름답게 바뀐 것이죠. 이런 경험을 나누는 것이 제 인생의 단순명료한 사명입니다.</p><div class="about-grid"><div class="about-item"><div class="num eng">01</div><h3>에니어그램의 지혜</h3><p>에니어그램은 인간의 정신적 메커니즘을 이해하는데 유용할 뿐만 아니라 우주의 법칙을 이해하고 적용하는데도 도움이 됩니다. 그래서 에니어그램의 3가지 도형인 원형, 삼각형, 헥사드와 9가지 숫자가 의미하는 각 상징들을 통해 삶의 지혜를 전합니다.</p></div><div class="about-item"><div class="num eng">02</div><h3>요가의 과학</h3><p>요가는 인간의 신체적 메커니즘을 이해하는데 유용할 뿐만 아니라 호흡계, 골격계, 근육계, 순환계, 소화계, 신경계, 내분비계 등의 인체 시스템에 대한 올바른 균형을 회복하는데도 도움이 됩니다. 그래서 요가의 자세를 통해 움직임의 과학을 전합니다.</p></div>
+<div class="credentials">
+<div class="cert-item"><img src="/images/cert-enneagram.png" alt="에니어그램 자격증" loading="lazy"><div class="cert-label">Enneagram Certification</div></div>
+<div class="cert-item"><img src="/images/cert-breath-coach.png" alt="호흡 코치 자격증" loading="lazy"><div class="cert-label">Breath Coach Certification</div></div>
+</div>
+</div></section>
 <section class="enneagram" id="enneagram"><div class="section-inner"><p class="section-label eng">The 9 Class Goals</p><h2 class="section-title-kr">9가지<br>수업 목표</h2><ol class="goals-list"><li>1. 모든 것에서 아름다움을 발견할 수 있도록 돕는다.</li><li>2. 자기 자신을 따뜻하게 돌볼 수 있도록 돕는다.</li><li>3. 성장의 과정 자체를 가치 있게 여길 수 있도록 돕는다.</li><li>4. 나답게 존재할 수 있도록 돕는다.</li><li>5. 과학적인 지식에 근거하여 실천할 수 있도록 돕는다.</li><li>6. 다치지 않고 안전하게 수련할 수 있도록 돕는다.</li><li>7. 몸을 움직이는 것의 즐거움을 느낄 수 있도록 돕는다.</li><li>8. 할 수 있는 것에 에너지를 집중할 수 있도록 돕는다.</li><li>9. 언제 어디서든 나만의 평화를 찾을 수 있도록 돕는다.</li></ol></div></section>
+<!-- ================ TESTIMONIALS ================ -->
+<section class="testimonial"><div class="section-inner"><p class="section-label eng">Testimonials</p><h2 class="section-title-bold">수강 후기</h2>
+<div class="testimonial-grid">
+<div class="testimonial-item"><p class="t-quote">"매일 아침 수업이 하루를 시작하는 가장 좋은 루틴이 되었습니다. 몸과 마음이 함께 가벼워지는 경험을 하고 있어요."</p><p class="t-author">— K.M. / Core 회원</p></div>
+<div class="testimonial-item"><p class="t-quote">"에니어그램을 통해 나 자신을 이해하고, 요가를 통해 몸의 균형을 찾아가는 과정이 정말 특별합니다."</p><p class="t-author">— S.J. / Premium 수료</p></div>
+</div></div></section>
+
 <!-- ================ MEMBERSHIP OVERVIEW ================ -->
 <section class="membership-overview" id="membership"><div class="section-inner"><p class="section-label eng">Membership</p><h2 class="section-title-bold">Membership<br><span style="font-size:1rem;font-weight:200">멤버십 안내</span></h2><p class="section-text">에니어그램에 기반한 요가 수련을 통해 모든 것에서 아름다움을 발견하는 여정을 함께합니다.</p>
 <div class="membership-cards">
@@ -307,7 +344,7 @@ footer p{font-size:0.72rem;color:#999;font-weight:300}
 <a href="https://blog.naver.com/junseong_hwang" target="_blank" rel="noopener" title="Naver Blog"><svg viewBox="0 0 24 24"><path d="M16.273 12.845 7.376 0H0v24h7.726V11.156L16.624 24H24V0h-7.727v12.845z"/></svg></a>
 <a href="https://brunch.co.kr/@junseonghwang" target="_blank" rel="noopener" title="Brunch"><svg viewBox="0 0 24 24"><path d="M16.612 5.373c-.212-.268-.648-.131-1.618.727-1.208 1.064-3.035 4.167-4.03 6.025-.112.207-.463.826-.906 1.603h-.002c-.541 1.343-.722 1.443-1.262 2.408-.178-.063-.373-.158-.572-.302l-.127.219c.103.105.293.249.536.363-.494.85-.855 1.474-.879 1.513-.066.117-.005.168.07.134.095-.041.185-.08.268-.117.686-.294.828-.421.879-.707.09-.521.353-.614.356-.614l.141-.005c.224-.012.697-.051 1.299-.17.397-.078.85-.268 1.327-.429.246-.08.497-.171.748-.283.784-.343 3.01-1.639 3.01-3.378 0-.66-.399-1.038-1.082-1.038-.96 0-2.214.835-3.617 2.296a.063.063 0 0 1-.08-.01c.178-.572.827-2.103 2.586-3.818 1.018-.996.5-1.381.5-1.381s1.028-.47 1.8-1.481c.463-.601 1.05-1.783.794-2.107zm-3.37 7.474l.044-.022c.258-.129.507-.2.699-.2.156 0 .275.044.353.134.09.098.122.249.1.446-.149 1.22-1.376 2.372-2.455 2.93-.197.1-.399.19-.598.266-1.062.419-2.085.519-2.319.541h-.051c.015-.022.636-1.007 1.617-2.054.711-.76 1.608-1.557 2.606-2.04h.003zM13.614 8.742c-.224.156.002.273.007.494.005.275-.497.616-1.26 1.442 1.462-2.79 3.622-4.868 3.622-4.868-.443 1.43-1.53 2.348-2.367 2.934l-.002-.002z"/><path d="M16.688 18.747l.105-.192H8.549l-.102.192h8.241z"/></svg></a>
 </div>
-<img class="logo-img" src="/images/signature.png" alt="Junseong Hwang">
+<img class="logo-img" src="/images/signature.png" alt="Junseong Hwang" loading="lazy">
 <div class="business-info">
 상호명: 에니어그램 클럽 <span class="bi-sep">|</span> 대표: 황준성<br>
 사업자등록번호: 666-02-03422<br>
@@ -397,6 +434,56 @@ async function updateNav(){
   }catch(err){}
 }
 updateNav();
+// === Nav highlight on scroll (Intersection Observer) ===
+(function(){
+  var sections=document.querySelectorAll('section[id]');
+  var navLinks=document.querySelectorAll('nav ul li a[href^="#"]');
+  var mobileLinks=document.querySelectorAll('.mobile-menu ul li a[href^="#"]');
+  var obs=new IntersectionObserver(function(entries){
+    entries.forEach(function(entry){
+      if(entry.isIntersecting){
+        var id=entry.target.id;
+        navLinks.forEach(function(l){l.classList.remove('nav-active')});
+        mobileLinks.forEach(function(l){l.classList.remove('nav-active')});
+        navLinks.forEach(function(l){if(l.getAttribute('href')==='#'+id)l.classList.add('nav-active')});
+        mobileLinks.forEach(function(l){if(l.getAttribute('href')==='#'+id)l.classList.add('nav-active')});
+      }
+    });
+  },{rootMargin:'-40% 0px -55% 0px'});
+  sections.forEach(function(s){obs.observe(s)});
+})();
+// === Fade-in animation ===
+(function(){
+  document.querySelectorAll('.section-inner,.hero-content').forEach(function(el){el.classList.add('fade-in')});
+  document.querySelectorAll('.hero-content').forEach(function(el){el.classList.add('visible')});
+  var obs=new IntersectionObserver(function(entries){
+    entries.forEach(function(entry){if(entry.isIntersecting){entry.target.classList.add('visible');obs.unobserve(entry.target)}});
+  },{threshold:0.12});
+  document.querySelectorAll('.fade-in:not(.visible)').forEach(function(el){obs.observe(el)});
+})();
+// === Phone auto-hyphen ===
+function formatPhone(input){
+  var v=input.value.replace(/[^0-9]/g,'');
+  if(v.length>11)v=v.slice(0,11);
+  if(v.length>7)v=v.slice(0,3)+'-'+v.slice(3,7)+'-'+v.slice(7);
+  else if(v.length>3)v=v.slice(0,3)+'-'+v.slice(3);
+  input.value=v;
+}
+document.querySelectorAll('input[type="tel"]').forEach(function(input){input.addEventListener('input',function(){formatPhone(this)})});
+// === Real-time form validation ===
+function validateEmailField(input){
+  if(!input.value){input.classList.remove('input-error','input-valid');return}
+  if(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.value)){input.classList.remove('input-error');input.classList.add('input-valid')}
+  else{input.classList.add('input-error');input.classList.remove('input-valid')}
+}
+function validatePhoneField(input){
+  var raw=input.value.replace(/-/g,'');
+  if(!raw){input.classList.remove('input-error','input-valid');return}
+  if(/^01[0-9][0-9]{7,8}$/.test(raw)){input.classList.remove('input-error');input.classList.add('input-valid')}
+  else{input.classList.add('input-error');input.classList.remove('input-valid')}
+}
+document.querySelectorAll('input[type="email"]').forEach(function(input){input.addEventListener('blur',function(){validateEmailField(this)})});
+document.querySelectorAll('input[type="tel"]').forEach(function(input){input.addEventListener('blur',function(){validatePhoneField(this)})});
 </script>
 </body>
 </html>
