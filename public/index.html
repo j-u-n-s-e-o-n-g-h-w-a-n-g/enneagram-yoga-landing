@@ -54,7 +54,7 @@ nav ul li a:hover{color:var(--accent)}
 @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(10px)}}
 .section-text{font-size:0.9rem;font-weight:300;line-height:2.4;color:#555;margin:0 auto 30px;max-width:900px}
 section{padding:120px 40px}
-.section-inner{max-width:1200px;margin:0 auto;text-align:center}
+.section-inner{max-width:1200px;margin:0 auto}
 .section-label{font-family:'Cormorant Garamond',serif;font-size:0.75rem;letter-spacing:0.35em;text-transform:uppercase;color:var(--accent);margin-bottom:16px}
 .section-title{font-family:'Cormorant Garamond',serif;font-size:2.8rem;font-weight:300;letter-spacing:0.03em;margin-bottom:50px;line-height:1.3}
 .section-title-kr{font-family:'Noto Serif KR',serif;font-size:2.8rem;font-weight:500;letter-spacing:0.03em;margin-bottom:50px;line-height:1.3}
@@ -81,7 +81,7 @@ section{padding:120px 40px}
 .form-group input{width:100%;padding:14px 0;border:none;border-bottom:1px solid var(--border);background:transparent;font-family:'Noto Serif KR',serif;font-size:0.9rem;font-weight:300;color:var(--text);outline:none;transition:border-color 0.3s}
 .form-group input:focus{border-bottom-color:var(--accent)}
 .form-group input::placeholder{color:#bbb;font-weight:200}
-.privacy-consent{margin-bottom:28px;display:flex;align-items:center;gap:10px}
+.privacy-consent{margin-bottom:10px;display:flex;align-items:center;gap:10px}
 .privacy-consent input[type="checkbox"]{width:18px;height:18px;accent-color:var(--accent);cursor:pointer;flex-shrink:0}
 .privacy-consent label{font-size:0.82rem;font-weight:300;color:#555;cursor:pointer;line-height:1.6}
 .privacy-consent label .required{color:var(--accent);font-weight:400}
@@ -183,7 +183,7 @@ footer p{font-size:0.72rem;color:#999;font-weight:300}
 <div class="membership-cards">
 <div class="m-card"><div class="m-tier eng">Core</div><div class="m-name">데일리 요가 클래스</div><div class="m-sub">평일 매일, ZOOM 실시간 온라인</div><div class="m-price eng">99,000<span style="font-size:0.9rem">원</span></div><div class="m-price-note">12회 이용권 (유효기간 3개월)</div><a href="#core" class="m-cta eng">Learn More</a></div>
 <div class="m-card"><div class="m-tier eng">Premium</div><div class="m-name">6주 집중수련 코스</div><div class="m-sub">소규모 그룹 (6명)</div><div class="m-price eng">3,300,000<span style="font-size:0.9rem">원</span></div><div class="m-price-note">1인 기준</div><a href="#premium" class="m-cta eng">Learn More</a></div>
-<div class="m-card vip-card"><div class="m-tier eng" style="color:#c4a35a">VIP</div><div class="m-name">12개월 밀착 VIP 1:1 코칭</div><div class="m-sub">54주 맞춤형 수업 설계</div><div class="m-price eng" style="color:#c4a35a">By Invitation</div><div class="m-price-note">&nbsp;</div><a href="#vip" class="m-cta eng">Learn More</a></div>
+<div class="m-card vip-card"><div class="m-tier eng" style="color:#c4a35a">VIP</div><div class="m-name">12개월 밀착 VIP 1:1 코칭</div><div class="m-sub">54주 맞춤형 수업 설계</div><div class="m-price eng" style="color:#c4a35a">&nbsp;</div><div class="m-price-note">&nbsp;</div><a href="#vip" class="m-cta eng">Learn More</a></div>
 </div></div></section>
 
 <!-- ================ CORE MEMBERSHIP ================ -->
@@ -225,7 +225,7 @@ footer p{font-size:0.72rem;color:#999;font-weight:300}
 
 <!-- ================ PREMIUM APPLY ================ -->
 <section class="premium-apply-section" id="premium-apply"><div class="section-inner" style="text-align:center"><p class="section-label eng">Premium Waitlist</p><h2 class="section-title-bold">6주 집중수련 신청</h2><p class="section-text" style="text-align:center;max-width:500px;margin:-30px auto 50px">대기자 등록 후 개별 안내드립니다.</p>
-<div class="waitlist-form" id="premiumWaitlistForm"><div class="form-group"><label class="eng">Name</label><input type="text" id="premiumName" placeholder="이름을 입력해주세요" required></div><div class="form-group"><label class="eng">Phone</label><input type="tel" id="premiumPhone" placeholder="연락처를 입력해주세요" required></div><div class="form-group"><label class="eng">Email</label><input type="email" id="premiumEmail" placeholder="이메일을 입력해주세요" required></div><div class="privacy-consent"><input type="checkbox" id="premiumPrivacyConsent"><label for="premiumPrivacyConsent"><span class="required">(필수)</span> <a href="#" onclick="openPrivacyModal(event)">개인정보 수집 및 이용</a>에 동의합니다.</label></div><div class="privacy-consent"><input type="checkbox" id="premiumDisclaimerConsent"><label for="premiumDisclaimerConsent"><span class="required">(필수)</span> <a href="#" onclick="openDisclaimerModal(event)">회원등록 및 수업 면책사항</a>에 동의합니다.</label></div><div style="text-align:center"><button type="button" class="submit-btn" onclick="submitWaitlist('premium')">Join Waitlist</button></div></div>
+<div class="waitlist-form" id="premiumWaitlistForm"><div class="form-group"><label class="eng">Name</label><input type="text" id="premiumName" placeholder="이름을 입력해주세요" required></div><div class="form-group"><label class="eng">Phone</label><input type="tel" id="premiumPhone" placeholder="연락처를 입력해주세요" required></div><div class="form-group"><label class="eng">Email</label><input type="email" id="premiumEmail" placeholder="이메일을 입력해주세요" required></div><div class="privacy-consent"><input type="checkbox" id="premiumPrivacyConsent"><label for="premiumPrivacyConsent"><span class="required">(필수)</span> <a href="#" onclick="openPrivacyModal(event)">개인정보 수집 및 이용</a>에 동의합니다.</label></div><div class="privacy-consent"><input type="checkbox" id="premiumDisclaimerConsent"><label for="premiumDisclaimerConsent"><span class="required">(필수)</span> <a href="#" onclick="openDisclaimerModal(event)">회원등록 및 수업 면책사항</a>에 동의합니다.</label></div><div style="text-align:center"><button type="button" class="submit-btn" id="premiumSubmitBtn" onclick="submitWaitlist('premium')" disabled>Join Waitlist</button></div></div>
 <div class="waitlist-success" id="premiumSuccess"><div class="check">✓</div><p>대기자 명단에 등록되었습니다.<br>확인 후 개별 연락드리겠습니다.</p></div>
 </div></section>
 
@@ -260,12 +260,11 @@ footer p{font-size:0.72rem;color:#999;font-weight:300}
 <li>기도습관 수련</li>
 </ul></div>
 </div>
-<div style="margin-top:50px;text-align:center"><p style="font-family:'Cormorant Garamond',serif;font-size:1.1rem;font-weight:300;color:#c4a35a;letter-spacing:0.15em">By Invitation</p></div>
 </div></section>
 
 <!-- ================ VIP APPLY ================ -->
-<section class="vip-apply-section" id="vip-apply"><div class="section-inner" style="text-align:center"><p class="section-label eng" style="color:#c4a35a">VIP Waitlist</p><h2 class="section-title-bold">VIP 1:1 코칭 신청</h2><p class="section-text" style="text-align:center;max-width:500px;margin:-30px auto 50px">대기자 등록 후 개별 안내드립니다.</p>
-<div class="waitlist-form" id="vipWaitlistForm"><div class="form-group"><label class="eng">Name</label><input type="text" id="vipName" placeholder="이름을 입력해주세요" required></div><div class="form-group"><label class="eng">Phone</label><input type="tel" id="vipPhone" placeholder="연락처를 입력해주세요" required></div><div class="form-group"><label class="eng">Email</label><input type="email" id="vipEmail" placeholder="이메일을 입력해주세요" required></div><div class="privacy-consent"><input type="checkbox" id="vipPrivacyConsent"><label for="vipPrivacyConsent"><span class="required">(필수)</span> <a href="#" onclick="openPrivacyModal(event)">개인정보 수집 및 이용</a>에 동의합니다.</label></div><div class="privacy-consent"><input type="checkbox" id="vipDisclaimerConsent"><label for="vipDisclaimerConsent"><span class="required">(필수)</span> <a href="#" onclick="openDisclaimerModal(event)">회원등록 및 수업 면책사항</a>에 동의합니다.</label></div><div style="text-align:center"><button type="button" class="submit-btn" onclick="submitWaitlist('vip')" style="border-color:#c4a35a;color:#c4a35a">Join Waitlist</button></div></div>
+<section class="vip-apply-section" id="vip-apply"><div class="section-inner" style="text-align:center"><p class="section-label eng" style="color:#c4a35a">VIP Waitlist</p><h2 class="section-title-bold">VIP 1:1 코칭 신청</h2><p class="section-text" style="text-align:center;max-width:500px;margin:-30px auto 20px">기존 VIP 멤버의 추천을 최우선순위로 하여 신청받습니다.</p><p class="section-text" style="text-align:center;max-width:500px;margin:0 auto 50px">대기자 등록 후 개별 안내드립니다.</p>
+<div class="waitlist-form" id="vipWaitlistForm"><div class="form-group"><label class="eng">Name</label><input type="text" id="vipName" placeholder="이름을 입력해주세요" required></div><div class="form-group"><label class="eng">Phone</label><input type="tel" id="vipPhone" placeholder="연락처를 입력해주세요" required></div><div class="form-group"><label class="eng">Email</label><input type="email" id="vipEmail" placeholder="이메일을 입력해주세요" required></div><div class="privacy-consent"><input type="checkbox" id="vipPrivacyConsent"><label for="vipPrivacyConsent"><span class="required">(필수)</span> <a href="#" onclick="openPrivacyModal(event)">개인정보 수집 및 이용</a>에 동의합니다.</label></div><div class="privacy-consent"><input type="checkbox" id="vipDisclaimerConsent"><label for="vipDisclaimerConsent"><span class="required">(필수)</span> <a href="#" onclick="openDisclaimerModal(event)">회원등록 및 수업 면책사항</a>에 동의합니다.</label></div><div style="text-align:center"><button type="button" class="submit-btn" id="vipSubmitBtn" onclick="submitWaitlist('vip')" style="border-color:#c4a35a;color:#c4a35a" disabled>Join Waitlist</button></div></div>
 <div class="waitlist-success" id="vipSuccess"><div class="check" style="color:#c4a35a">✓</div><p>대기자 명단에 등록되었습니다.<br>확인 후 개별 연락드리겠습니다.</p></div>
 </div></section>
 <div class="modal-overlay" id="modalOverlay"><div class="modal"><button class="modal-close" onclick="closeModal()">×</button><div class="check-icon">✓</div><h3 class="eng">Application Received</h3><div id="modalActiveContent"><p style="font-size:0.85rem;font-weight:300;margin-bottom:20px;color:#555">클래스 신청이 접수되었습니다.<br>아래 계좌로 <strong>10분 이내</strong>에 입금해주시면<br>자동으로 신청이 완료됩니다.</p><div class="bank-info"><strong>입금 계좌</strong><br>농협 312-0025-5524-11<br><strong>예금주</strong> 황준성<br><strong>금액</strong> 99,000원 (12회 이용권)</div><div class="notice-highlight">신청자명과 입금자명이 동일해야 자동완료 처리가 됩니다.<br>입금 후 입력하신 휴대폰 번호로 현금영수증이 자동 발급됩니다.</div><div class="timer" id="timerDisplay">10:00</div><p class="notice">입금 확인 후 로그인 정보가 SMS로 발송됩니다.<br>SMS로 받은 비밀번호로 마이페이지에 로그인할 수 있습니다.</p></div><div class="timer-expired" id="timerExpired"><p>예정된 입금 시간이 종료되었습니다.<br>새로운 신청을 통해 다시 진행해 주세요.</p></div></div></div>
@@ -329,6 +328,11 @@ const GOOGLE_SCRIPT_URL='https://script.google.com/macros/s/AKfycbzIGDQrUyjyez0-
 function updateCoreSubmitBtn(){var p=document.getElementById('privacyConsent').checked;var d=document.getElementById('disclaimerConsent').checked;document.getElementById('submitBtn').disabled=!(p&&d);}
 document.getElementById('privacyConsent').addEventListener('change',updateCoreSubmitBtn);
 document.getElementById('disclaimerConsent').addEventListener('change',updateCoreSubmitBtn);
+function updateWaitlistBtn(prefix){var p=document.getElementById(prefix+'PrivacyConsent').checked;var d=document.getElementById(prefix+'DisclaimerConsent').checked;document.getElementById(prefix+'SubmitBtn').disabled=!(p&&d);}
+document.getElementById('premiumPrivacyConsent').addEventListener('change',function(){updateWaitlistBtn('premium')});
+document.getElementById('premiumDisclaimerConsent').addEventListener('change',function(){updateWaitlistBtn('premium')});
+document.getElementById('vipPrivacyConsent').addEventListener('change',function(){updateWaitlistBtn('vip')});
+document.getElementById('vipDisclaimerConsent').addEventListener('change',function(){updateWaitlistBtn('vip')});
 async function handleSubmit(e){e.preventDefault();if(!document.getElementById('privacyConsent').checked||!document.getElementById('disclaimerConsent').checked){alert('모든 필수 항목에 동의해주세요.');return false}const name=document.getElementById('userName').value;const phone=document.getElementById('userPhone').value;const email=document.getElementById('userEmail').value;
 const csrfToken=await getCsrfToken();
 const consents=[{type:'privacy',agreed:true},{type:'terms',agreed:document.getElementById('termsConsent')?document.getElementById('termsConsent').checked:false}];
