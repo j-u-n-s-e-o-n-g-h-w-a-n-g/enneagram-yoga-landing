@@ -949,4 +949,90 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
       res.status(500).json({ error: '메시지 이력 조회 오류: ' + err.message });
     }
   });
+
+  // ===================== WAITLIST 관리 =====================
+
+  // 대기자 목록 조회
+  app.get('/api/admin/waitlist', middleware.requireDB, middleware.requireAdmin, async (req, res) => {
+    const pool = getPool();
+    try {
+      const { membership_type, status, search, page = 1, limit = 50 } = req.query;
+      const offset = (parseInt(page) - 1) * parseInt(limit);
+      let where = [];
+      let params = [];
+      let idx = 1;
+
+      if (membership_type && ['premium', 'vip'].includes(membership_type)) {
+        where.push(`membership_type = $${idx++}`);
+        params.push(membership_type);
+      }
+      if (status && ['pending', 'contacted', 'converted'].includes(status)) {
+        where.push(`status = $${idx++}`);
+        params.push(status);
+      }
+      if (search) {
+        where.push(`(name ILIKE $${idx} OR email ILIKE $${idx} OR phone ILIKE $${idx})`);
+        params.push(`%${search}%`);
+        idx++;
+      }
+
+      const whereClause = where.length > 0 ? 'WHERE ' + where.join(' AND ') : '';
+
+      const countResult = await pool.query(`SELECT COUNT(*) FROM waitlist ${whereClause}`, params);
+      const totalCount = parseInt(countResult.rows[0].count);
+
+      const result = await pool.query(
+        `SELECT * FROM waitlist ${whereClause} ORDER BY created_at DESC LIMIT $${idx++} OFFSET $${idx++}`,
+        [...params, parseInt(limit), offset]
+      );
+
+      res.json({
+        waitlist: result.rows,
+        pagination: { page: parseInt(page), limit: parseInt(limit), total: totalCount, totalPages: Math.ceil(totalCount / parseInt(limit)) }
+      });
+    } catch (err) {
+      console.error('Waitlist list error:', err);
+      res.status(500).json({ error: '대기자 목록 조회 오류' });
+    }
+  });
+
+  // 대기자 상태 변경
+  app.patch('/api/admin/waitlist/:id', middleware.requireDB, middleware.requireAdmin, async (req, res) => {
+    const pool = getPool();
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
+      if (!status || !['pending', 'contacted', 'converted'].includes(status)) {
+        return res.status(400).json({ error: '유효하지 않은 상태입니다' });
+      }
+      const result = await pool.query(
+        'UPDATE waitlist SET status = $1 WHERE id = $2 RETURNING *',
+        [status, id]
+      );
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: '대기자를 찾을 수 없습니다' });
+      }
+      res.json({ success: true, waitlist: result.rows[0] });
+    } catch (err) {
+      console.error('Waitlist update error:', err);
+      res.status(500).json({ error: '대기자 상태 변경 오류' });
+    }
+  });
+
+  // 대기자 삭제
+  app.delete('/api/admin/waitlist/:id', middleware.requireDB, middleware.requireAdmin, async (req, res) => {
+    const pool = getPool();
+    try {
+      const { id } = req.params;
+      const result = await pool.query('DELETE FROM waitlist WHERE id = $1 RETURNING *', [id]);
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: '대기자를 찾을 수 없습니다' });
+      }
+      res.json({ success: true });
+    } catch (err) {
+      console.error('Waitlist delete error:', err);
+      res.status(500).json({ error: '대기자 삭제 오류' });
+    }
+  });
 };
+

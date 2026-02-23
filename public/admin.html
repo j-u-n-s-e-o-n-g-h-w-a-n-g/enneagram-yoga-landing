@@ -145,6 +145,7 @@ footer p{font-size:0.7rem;color:#999;font-weight:300}
 <button class="tab" onclick="switchTab('bulk-sms')">단체 SMS</button>
 <button class="tab" onclick="switchTab('attendance-history')">수업 이력</button>
 <button class="tab" onclick="switchTab('messages')">메시지 이력</button>
+<button class="tab" onclick="switchTab('waitlist')">대기자 관리</button>
 </div>
 <div class="tab-content active" id="tab-payments">
 <div style="margin-bottom:16px"><input type="text" id="searchPayments" placeholder="이름, 전화번호, 입금자명으로 검색..." style="width:100%;padding:10px;border:1px solid var(--border);font-family:'Noto Serif KR',serif;font-size:0.82rem;outline:none" onkeyup="if(event.key==='Enter')searchPaymentsFn()"><button class="action-btn small" style="margin-top:8px" onclick="searchPaymentsFn()">검색</button></div>
@@ -239,6 +240,31 @@ footer p{font-size:0.7rem;color:#999;font-weight:300}
 <div class="section-box">
 <div id="messageList"><div class="loading">불러오는 중</div></div>
 <div id="messagePagination"></div>
+</div>
+</div>
+
+<div class="tab-content" id="tab-waitlist">
+<div style="display:flex;gap:12px;align-items:flex-end;margin-bottom:16px;flex-wrap:wrap">
+<div class="filter-row" style="margin-bottom:0">
+<button class="filter-btn active" onclick="filterWaitlist('all', this)">전체</button>
+<button class="filter-btn" onclick="filterWaitlist('premium', this)">Premium</button>
+<button class="filter-btn" onclick="filterWaitlist('vip', this)">VIP</button>
+</div>
+<div class="filter-row" style="margin-bottom:0">
+<button class="filter-btn active" onclick="filterWaitlistStatus('all', this)">모든 상태</button>
+<button class="filter-btn" onclick="filterWaitlistStatus('pending', this)">대기중</button>
+<button class="filter-btn" onclick="filterWaitlistStatus('contacted', this)">연락완료</button>
+<button class="filter-btn" onclick="filterWaitlistStatus('converted', this)">전환완료</button>
+</div>
+<div style="flex:1;min-width:180px"><input type="text" id="searchWaitlist" placeholder="이름, 전화번호, 이메일로 검색..." style="width:100%;padding:8px 10px;border:1px solid var(--border);font-family:'Noto Serif KR',serif;font-size:0.8rem;outline:none" onkeyup="if(event.key==='Enter')loadWaitlist()"></div>
+<button class="action-btn small" onclick="loadWaitlist()">검색</button>
+</div>
+<div class="section-box">
+<table>
+<thead><tr><th>이름</th><th>연락처</th><th>이메일</th><th>멤버십</th><th>상태</th><th>신청일</th><th>관리</th></tr></thead>
+<tbody id="waitlistTableBody"><tr><td colspan="7" style="text-align:center;padding:30px;color:#888">불러오는 중</td></tr></tbody>
+</table>
+<div id="waitlistPagination" style="margin-top:16px"></div>
 </div>
 </div>
 
@@ -784,6 +810,7 @@ function switchTab(tab) {
   if (tab === 'messages') { loadMessageHistory(1); }
   if (tab === 'attendance-history') { loadAttendanceHistory(1); }
   if (tab === 'bulk-sms') { loadBulkTargets(currentBulkType); }
+  if (tab === 'waitlist') { loadWaitlist(1); }
 }
 
 function filterPayments(status, btn) {
@@ -1326,6 +1353,111 @@ function filterMessages(type, btn) {
   btn.classList.add('active');
   msgPage = 1;
   loadMessageHistory();
+}
+
+// ===================== WAITLIST MANAGEMENT =====================
+let waitlistTypeFilter = 'all';
+let waitlistStatusFilter = 'all';
+let waitlistPage = 1;
+const WAITLIST_PAGE_SIZE = 50;
+
+async function loadWaitlist(page) {
+  if (page !== undefined) waitlistPage = page;
+  document.getElementById('waitlistTableBody').innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;color:#888">불러오는 중</td></tr>';
+  try {
+    const search = document.getElementById('searchWaitlist').value;
+    let url = '/api/admin/waitlist?page=' + waitlistPage + '&limit=' + WAITLIST_PAGE_SIZE;
+    if (waitlistTypeFilter !== 'all') url += '&membership_type=' + waitlistTypeFilter;
+    if (waitlistStatusFilter !== 'all') url += '&status=' + waitlistStatusFilter;
+    if (search) url += '&search=' + encodeURIComponent(search);
+
+    const res = await apiFetch(url);
+    const data = await res.json();
+    const items = data.waitlist || [];
+    const total = (data.pagination && data.pagination.total) || 0;
+    const totalPages = Math.ceil(total / WAITLIST_PAGE_SIZE) || 1;
+
+    if (items.length === 0) {
+      document.getElementById('waitlistTableBody').innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;color:#888">대기자가 없습니다</td></tr>';
+      document.getElementById('waitlistPagination').innerHTML = '';
+      return;
+    }
+
+    let html = '';
+    items.forEach(function(w) {
+      var dt = new Date(w.created_at);
+      var date = dt.toLocaleDateString('ko-KR');
+      var typeBadge = w.membership_type === 'vip'
+        ? '<span class="badge" style="background:#fffbe6;color:#c4a35a;border:1px solid #c4a35a">VIP</span>'
+        : '<span class="badge" style="background:#f3e5f5;color:#7b1fa2;border:1px solid #ce93d8">Premium</span>';
+      var statusLabels = { pending: '대기중', contacted: '연락완료', converted: '전환완료' };
+      var statusBadges = { pending: 'badge-pending', contacted: 'badge-active', converted: 'badge-confirmed' };
+      var statusBadge = '<span class="badge ' + (statusBadges[w.status] || 'badge-pending') + '">' + (statusLabels[w.status] || w.status) + '</span>';
+
+      html += '<tr>';
+      html += '<td>' + escapeHtml(w.name) + '</td>';
+      html += '<td style="font-size:0.76rem">' + escapeHtml(w.phone) + '</td>';
+      html += '<td style="font-size:0.76rem">' + escapeHtml(w.email) + '</td>';
+      html += '<td>' + typeBadge + '</td>';
+      html += '<td>' + statusBadge + '</td>';
+      html += '<td style="font-size:0.76rem;white-space:nowrap">' + date + '</td>';
+      html += '<td style="white-space:nowrap">';
+      if (w.status === 'pending') html += '<button class="action-btn small" onclick="updateWaitlistStatus(' + w.id + ',\'contacted\')">연락완료</button> ';
+      if (w.status === 'contacted') html += '<button class="action-btn small" onclick="updateWaitlistStatus(' + w.id + ',\'converted\')">전환완료</button> ';
+      if (w.status !== 'converted') html += '<button class="action-btn small danger" onclick="deleteWaitlistItem(' + w.id + ')">삭제</button>';
+      html += '</td>';
+      html += '</tr>';
+    });
+
+    document.getElementById('waitlistTableBody').innerHTML = html;
+    renderPagination('waitlistPagination', waitlistPage, totalPages, 'goWaitlistPage');
+  } catch (err) {
+    console.error('Waitlist load error:', err);
+    document.getElementById('waitlistTableBody').innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;color:#c44">조회 중 오류가 발생했습니다</td></tr>';
+  }
+}
+
+function goWaitlistPage(page) { loadWaitlist(page); }
+
+function filterWaitlist(type, btn) {
+  waitlistTypeFilter = type;
+  document.querySelectorAll('#tab-waitlist .filter-row:first-child .filter-btn').forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+  waitlistPage = 1;
+  loadWaitlist();
+}
+
+function filterWaitlistStatus(status, btn) {
+  waitlistStatusFilter = status;
+  document.querySelectorAll('#tab-waitlist .filter-row:nth-child(2) .filter-btn').forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+  waitlistPage = 1;
+  loadWaitlist();
+}
+
+async function updateWaitlistStatus(id, status) {
+  var statusLabels = { contacted: '연락완료', converted: '전환완료' };
+  if (!confirm(statusLabels[status] + ' 상태로 변경하시겠습니까?')) return;
+  try {
+    const res = await apiFetch('/api/admin/waitlist/' + id, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: status })
+    });
+    const data = await res.json();
+    if (data.success) { loadWaitlist(); }
+    else { alert(data.error || '상태 변경 실패'); }
+  } catch (err) { alert('네트워크 오류'); }
+}
+
+async function deleteWaitlistItem(id) {
+  if (!confirm('이 대기자를 삭제하시겠습니까?')) return;
+  try {
+    const res = await apiFetch('/api/admin/waitlist/' + id, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.success) { loadWaitlist(); }
+    else { alert(data.error || '삭제 실패'); }
+  } catch (err) { alert('네트워크 오류'); }
 }
 
 checkAuth();

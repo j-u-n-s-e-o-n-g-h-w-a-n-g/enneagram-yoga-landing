@@ -156,6 +156,21 @@ async function initDB() {
       );
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_credit_logs_user ON credit_logs (user_id);`);
+    // Waitlist (Premium/VIP 대기자 명단)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS waitlist (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        email VARCHAR(255) NOT NULL,
+        phone VARCHAR(20) NOT NULL,
+        membership_type VARCHAR(20) NOT NULL,
+        message TEXT,
+        status VARCHAR(20) DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_waitlist_type ON waitlist (membership_type);`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_waitlist_status ON waitlist (status);`);
     // Notification log (SMS/Email/현금영수증 발송 이력)
     await client.query(`
       CREATE TABLE IF NOT EXISTS notification_log (
@@ -269,3 +284,4 @@ function getDbUrl() {
 }
 
 module.exports = { getPool, initDB, isDBReady, getDbUrl };
+

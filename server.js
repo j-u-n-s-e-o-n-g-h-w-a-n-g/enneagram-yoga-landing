@@ -158,6 +158,7 @@ app.use('/api/members', requireCsrf);
 app.use('/api/admin', requireCsrf);
 app.use('/api/passes', requireCsrf);
 app.use('/api/zoom-register', requireCsrf);
+app.use('/api/waitlist', requireCsrf);
 
 // ===================== Rate Limiter (sliding window) =====================
 const appRateLimiter = (() => {
@@ -244,6 +245,47 @@ app.post('/api/applications', middleware.requireDB, appRateLimiter, async (req, 
   }
 });
 
+// ===================== WAITLIST API (공개) =====================
+
+app.post('/api/waitlist', middleware.requireDB, appRateLimiter, async (req, res) => {
+  const pool = getPool();
+  try {
+    const { name, email, phone, membership_type } = req.body;
+    if (!name || !email || !phone || !membership_type) return res.status(400).json({ error: '모든 필수 항목을 입력해주세요' });
+    if (name.length > 50) return res.status(400).json({ error: '이름은 50자 이하로 입력해주세요' });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: '올바른 이메일 형식이 아닙니다' });
+    const normalizedPhone = phone.replace(/[-\s]/g, '');
+    if (!/^01[016789]\d{7,8}$/.test(normalizedPhone)) return res.status(400).json({ error: '올바른 전화번호 형식이 아닙니다' });
+    if (!['premium', 'vip'].includes(membership_type)) return res.status(400).json({ error: '유효하지 않은 멤버십 유형입니다' });
+
+    // Check duplicate (same email + same type + pending)
+    const existing = await pool.query(
+      "SELECT id FROM waitlist WHERE email = $1 AND membership_type = $2 AND status = 'pending'",
+      [email, membership_type]
+    );
+    if (existing.rows.length > 0) {
+      await pool.query(
+        'UPDATE waitlist SET name = $1, phone = $2, created_at = NOW() WHERE id = $3',
+        [name, normalizedPhone, existing.rows[0].id]
+      );
+    } else {
+      await pool.query(
+        'INSERT INTO waitlist (name, email, phone, membership_type) VALUES ($1, $2, $3, $4)',
+        [name, email, normalizedPhone, membership_type]
+      );
+    }
+
+    // Discord notification
+    const typeLabel = membership_type === 'premium' ? 'Premium (6주 집중수련)' : 'VIP (12개월 1:1 코칭)';
+    services.discord.notifyDiscord(`📋 [${typeLabel}] 새 대기자 신청\n이름: ${name}\n연락처: ${normalizedPhone}\n이메일: ${email}`).catch(() => {});
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Waitlist error:', err);
+    res.status(500).json({ error: '서버 오류가 발생했습니다' });
+  }
+});
+
 // ===================== 라우트 모듈 등록 =====================
 require('./routes/webhook')(app, routeContext);
 require('./routes/admin')(app, routeContext);
@@ -284,3 +326,4 @@ async function start() {
   });
 }
 start();
+
