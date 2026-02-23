@@ -190,10 +190,10 @@ nav ul li a.nav-active{color:var(--accent)}
 .testimonial-item .t-quote{font-size:0.88rem;font-weight:300;line-height:2.2;color:#555;font-style:italic;margin-bottom:16px}
 .testimonial-item .t-author{font-size:0.78rem;font-weight:400;color:var(--accent);letter-spacing:0.05em}
 /* Credentials */
-.credentials{max-width:900px;margin:60px auto 0;display:grid;grid-template-columns:1fr 1fr;gap:40px}
+.credentials{max-width:900px;margin:40px auto 0;display:grid;grid-template-columns:1fr 1fr;gap:40px}
 .cert-item{text-align:center}
-.cert-item img{width:100%;max-width:360px;border:1px solid var(--border)}
-.cert-item .cert-label{font-size:0.75rem;font-weight:300;color:#888;margin-top:12px;line-height:1.6}
+.cert-item img{width:100%;max-width:320px;aspect-ratio:4/3;object-fit:cover;border:1px solid var(--border);filter:grayscale(20%) brightness(1.02);transition:all 0.5s ease}
+.cert-item img:hover{filter:grayscale(0%) brightness(1.05);transform:scale(1.02)}
 @media(max-width:768px){nav{padding:0 24px}nav .inner{padding:0}nav ul{display:none}.hamburger{display:block}nav .logo img{height:28px}.hero h1{font-size:2.8rem}.about-grid,.class-details,.membership-cards{grid-template-columns:1fr}section{padding:80px 24px}.section-title,.section-title-kr,.section-title-bold{font-size:2rem}.modal{padding:40px 28px}.privacy-modal{padding:36px 24px}.terms-modal{padding:36px 24px}footer{padding:60px 24px}footer .logo-img{height:24px}.sns-icons{grid-template-columns:repeat(3,36px);gap:14px}.sns-icons a{width:36px;height:36px}.sns-icons a svg{width:16px;height:16px}.m-card{padding:36px 24px}.testimonial-grid,.credentials{grid-template-columns:1fr}}
 </style>
 </head>
@@ -201,18 +201,19 @@ nav ul li a.nav-active{color:var(--accent)}
 <nav><div class="inner"><a href="#" class="logo" onclick="event.preventDefault();window.scrollTo({top:0,behavior:'smooth'})"><img src="/images/signature.png" alt="Junseong Hwang"></a><ul><li><a href="#about">About</a></li><li><a href="#enneagram">The 9 Class Goals</a></li><li><a href="#membership">Membership</a></li><li id="authLink"><a href="/login" class="nav-auth">Sign In</a></li></ul><button class="hamburger" id="hamburgerBtn" onclick="toggleMenu()"><span></span><span></span><span></span></button></div></nav>
 <div class="mobile-menu" id="mobileMenu"><ul><li><a href="#about" onclick="toggleMenu()">About</a></li><li><a href="#enneagram" onclick="toggleMenu()">The 9 Class Goals</a></li><li><a href="#membership" onclick="toggleMenu()">Membership</a></li><li id="authLinkMobile"><a href="/login" class="nav-auth">Sign In</a></li></ul></div>
 <section class="hero"><div class="hero-content"><p class="sub eng">Enneagram × Yoga</p><h1 class="eng">Beauty Perception<br>YOGA</h1><p class="kr-title">모든 것에서 아름다움을<br>발견할 수 있도록 수련합니다.</p><div class="arrow-down">↓</div></div></section>
-<section class="about" id="about"><div class="section-inner"><p class="section-label eng">About</p><h2 class="section-title-bold">요가코치<br>황준성</h2><p class="section-text">에니어그램을 통해 인간의 정신적 메커니즘을 이해하게 되었고, 요가를 통해 인간의 신체적 메커니즘을 이해하게 되었습니다. 정신과 신체에 대한 메커니즘을 이해하게 되니 모든 것에서 아름다움을 발견하는 순간들이 많아지더군요. 세상은 여전히 그대로지만 그 세상을 바라보는 저의 시선이 그토록 아름답게 바뀐 것이죠. 이런 경험을 나누는 것이 제 인생의 단순명료한 사명입니다.</p><div class="about-grid"><div class="about-item"><div class="num eng">01</div><h3>에니어그램의 지혜</h3><p>에니어그램은 인간의 정신적 메커니즘을 이해하는데 유용할 뿐만 아니라 우주의 법칙을 이해하고 적용하는데도 도움이 됩니다. 그래서 에니어그램의 3가지 도형인 원형, 삼각형, 헥사드와 9가지 숫자가 의미하는 각 상징들을 통해 삶의 지혜를 전합니다.</p></div><div class="about-item"><div class="num eng">02</div><h3>요가의 과학</h3><p>요가는 인간의 신체적 메커니즘을 이해하는데 유용할 뿐만 아니라 호흡계, 골격계, 근육계, 순환계, 소화계, 신경계, 내분비계 등의 인체 시스템에 대한 올바른 균형을 회복하는데도 도움이 됩니다. 그래서 요가의 자세를 통해 움직임의 과학을 전합니다.</p></div>
+<section class="about" id="about"><div class="section-inner"><p class="section-label eng">About</p><h2 class="section-title-bold">요가코치<br>황준성</h2><p class="section-text">에니어그램을 통해 인간의 정신적 메커니즘을 이해하게 되었고, 요가를 통해 인간의 신체적 메커니즘을 이해하게 되었습니다. 정신과 신체에 대한 메커니즘을 이해하게 되니 모든 것에서 아름다움을 발견하는 순간들이 많아지더군요. 세상은 여전히 그대로지만 그 세상을 바라보는 저의 시선이 그토록 아름답게 바뀐 것이죠. 이런 경험을 나누는 것이 제 인생의 단순명료한 사명입니다.</p>
 <div class="credentials">
-<div class="cert-item"><img src="/images/cert-enneagram.png" alt="에니어그램 자격증" loading="lazy"><div class="cert-label">Enneagram Certification</div></div>
-<div class="cert-item"><img src="/images/cert-breath-coach.png" alt="호흡 코치 자격증" loading="lazy"><div class="cert-label">Breath Coach Certification</div></div>
+<div class="cert-item"><img src="/images/cert-enneagram.png" alt="에니어그램 자격증" loading="lazy"></div>
+<div class="cert-item"><img src="/images/cert-breath-coach.png" alt="호흡 코치 자격증" loading="lazy"></div>
 </div>
+<div class="about-grid"><div class="about-item"><div class="num eng">01</div><h3>에니어그램의 지혜</h3><p>에니어그램은 인간의 정신적 메커니즘을 이해하는데 유용할 뿐만 아니라 우주의 법칙을 이해하고 적용하는데도 도움이 됩니다. 그래서 에니어그램의 3가지 도형인 원형, 삼각형, 헥사드와 9가지 숫자가 의미하는 각 상징들을 통해 삶의 지혜를 전합니다.</p></div><div class="about-item"><div class="num eng">02</div><h3>요가의 과학</h3><p>요가는 인간의 신체적 메커니즘을 이해하는데 유용할 뿐만 아니라 호흡계, 골격계, 근육계, 순환계, 소화계, 신경계, 내분비계 등의 인체 시스템에 대한 올바른 균형을 회복하는데도 도움이 됩니다. 그래서 요가의 자세를 통해 움직임의 과학을 전합니다.</p></div>
 </div></section>
 <section class="enneagram" id="enneagram"><div class="section-inner"><p class="section-label eng">The 9 Class Goals</p><h2 class="section-title-kr">9가지<br>수업 목표</h2><ol class="goals-list"><li>1. 모든 것에서 아름다움을 발견할 수 있도록 돕는다.</li><li>2. 자기 자신을 따뜻하게 돌볼 수 있도록 돕는다.</li><li>3. 성장의 과정 자체를 가치 있게 여길 수 있도록 돕는다.</li><li>4. 나답게 존재할 수 있도록 돕는다.</li><li>5. 과학적인 지식에 근거하여 실천할 수 있도록 돕는다.</li><li>6. 다치지 않고 안전하게 수련할 수 있도록 돕는다.</li><li>7. 몸을 움직이는 것의 즐거움을 느낄 수 있도록 돕는다.</li><li>8. 할 수 있는 것에 에너지를 집중할 수 있도록 돕는다.</li><li>9. 언제 어디서든 나만의 평화를 찾을 수 있도록 돕는다.</li></ol></div></section>
 <!-- ================ TESTIMONIALS ================ -->
 <section class="testimonial"><div class="section-inner"><p class="section-label eng">Testimonials</p><h2 class="section-title-bold">수강 후기</h2>
 <div class="testimonial-grid">
-<div class="testimonial-item"><p class="t-quote">"매일 아침 수업이 하루를 시작하는 가장 좋은 루틴이 되었습니다. 몸과 마음이 함께 가벼워지는 경험을 하고 있어요."</p><p class="t-author">— K.M. / Core 회원</p></div>
-<div class="testimonial-item"><p class="t-quote">"에니어그램을 통해 나 자신을 이해하고, 요가를 통해 몸의 균형을 찾아가는 과정이 정말 특별합니다."</p><p class="t-author">— S.J. / Premium 수료</p></div>
+<div class="testimonial-item"><p class="t-quote">"매일 아침 수업이 하루를 시작하는 가장 좋은 루틴이 되었습니다. 몸과 마음이 함께 가벼워지는 경험을 하고 있어요."</p><p class="t-author">— K.M. / Core Member</p></div>
+<div class="testimonial-item"><p class="t-quote">"에니어그램을 통해 나 자신을 이해하고, 요가를 통해 몸의 균형을 찾아가는 과정이 정말 특별합니다."</p><p class="t-author">— S.J. / Premium Member</p></div>
 </div></div></section>
 
 <!-- ================ MEMBERSHIP OVERVIEW ================ -->
@@ -220,7 +221,7 @@ nav ul li a.nav-active{color:var(--accent)}
 <div class="membership-cards">
 <div class="m-card"><div class="m-tier eng">Core</div><div class="m-name">데일리 요가 클래스</div><div class="m-sub">평일 매일, ZOOM 실시간 온라인</div><div class="m-price eng">99,000<span style="font-size:0.9rem">원</span></div><div class="m-price-note">12회 이용권 (유효기간 3개월)</div><a href="#core" class="m-cta eng">Learn More</a></div>
 <div class="m-card"><div class="m-tier eng">Premium</div><div class="m-name">6주 집중수련 코스</div><div class="m-sub">소규모 그룹 (6명)</div><div class="m-price eng">3,300,000<span style="font-size:0.9rem">원</span></div><div class="m-price-note">1인 기준</div><a href="#premium" class="m-cta eng">Learn More</a></div>
-<div class="m-card vip-card"><div class="m-tier eng" style="color:#c4a35a">VIP</div><div class="m-name">12개월 밀착 VIP 1:1 코칭</div><div class="m-sub">54주 맞춤형 수업 설계</div><div class="m-price eng" style="color:#c4a35a">&nbsp;</div><div class="m-price-note">&nbsp;</div><a href="#vip" class="m-cta eng">Learn More</a></div>
+<div class="m-card vip-card"><div class="m-tier eng" style="color:#c4a35a">VIP</div><div class="m-name">12개월 밀착 VIP 1:1 코칭</div><div class="m-sub">54주 맞춤형 수업 설계</div><div class="m-price" style="color:#c4a35a;font-size:1rem;font-weight:300;letter-spacing:0.08em">개별 상담</div><div class="m-price-note">&nbsp;</div><a href="#vip" class="m-cta eng">Learn More</a></div>
 </div></div></section>
 
 <!-- ================ CORE MEMBERSHIP ================ -->
@@ -300,7 +301,7 @@ nav ul li a.nav-active{color:var(--accent)}
 </div></section>
 
 <!-- ================ VIP APPLY ================ -->
-<section class="vip-apply-section" id="vip-apply"><div class="section-inner" style="text-align:center"><p class="section-label eng" style="color:#c4a35a">VIP Waitlist</p><h2 class="section-title-bold">VIP 1:1 코칭 신청</h2><p class="section-text" style="text-align:center;max-width:500px;margin:-30px auto 4px">기존 VIP 멤버의 추천을 최우선순위로 하여 신청받습니다.</p><p class="section-text" style="text-align:center;max-width:500px;margin:0 auto 50px">대기자 등록 후 개별 안내드립니다.</p>
+<section class="vip-apply-section" id="vip-apply"><div class="section-inner" style="text-align:center"><p class="section-label eng" style="color:#c4a35a">VIP Waitlist</p><h2 class="section-title-bold">VIP 1:1 코칭 신청</h2><p class="section-text" style="text-align:center;max-width:500px;margin:-30px auto 50px">기존 VIP 멤버의 추천을 최우선순위로 하여 신청받습니다.</p>
 <div class="waitlist-form" id="vipWaitlistForm"><div class="form-group"><label class="eng">Name</label><input type="text" id="vipName" placeholder="이름을 입력해주세요" required></div><div class="form-group"><label class="eng">Phone</label><input type="tel" id="vipPhone" placeholder="연락처를 입력해주세요" required></div><div class="form-group"><label class="eng">Email</label><input type="email" id="vipEmail" placeholder="이메일을 입력해주세요" required></div><div class="privacy-consent"><input type="checkbox" id="vipPrivacyConsent"><label for="vipPrivacyConsent"><span class="required">(필수)</span> <a href="#" onclick="openPrivacyModal(event)">개인정보 수집 및 이용</a>에 동의합니다.</label></div><div class="privacy-consent"><input type="checkbox" id="vipDisclaimerConsent"><label for="vipDisclaimerConsent"><span class="required">(필수)</span> <a href="#" onclick="openDisclaimerModal(event)">회원등록 및 수업 면책사항</a>에 동의합니다.</label></div><div style="text-align:center;margin-top:30px"><button type="button" class="submit-btn" id="vipSubmitBtn" onclick="submitWaitlist('vip')" style="border-color:#c4a35a;color:#c4a35a" disabled>Join Waitlist</button></div></div>
 <div class="waitlist-success" id="vipSuccess"><div class="check" style="color:#c4a35a">✓</div><p>대기자 명단에 등록되었습니다.<br>확인 후 개별 연락드리겠습니다.</p></div>
 </div></section>
