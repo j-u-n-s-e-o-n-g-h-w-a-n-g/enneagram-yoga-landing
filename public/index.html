@@ -137,7 +137,7 @@ footer p{font-size:0.72rem;color:#999;font-weight:300}
 .terms-modal .terms-supplement p{font-size:0.84rem;font-weight:300;line-height:2.2;color:#555}
 /* Membership Cards */
 .membership-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:30px;margin:60px auto 0;max-width:1000px}
-.m-card{background:var(--white);border:1px solid var(--border);padding:48px 36px;text-align:center;transition:all 0.4s;position:relative}
+.m-card{background:var(--white);border:1px solid var(--border);padding:48px 36px;text-align:center;transition:all 0.4s;position:relative;display:flex;flex-direction:column}
 .m-card:hover{border-color:var(--accent);transform:translateY(-4px)}
 .m-card.vip-card{border-color:#c4a35a;border-width:1.5px}
 .m-card .m-tier{font-family:'Cormorant Garamond',serif;font-size:0.72rem;letter-spacing:0.3em;text-transform:uppercase;color:var(--accent);margin-bottom:8px}
@@ -145,8 +145,9 @@ footer p{font-size:0.72rem;color:#999;font-weight:300}
 .m-card .m-sub{font-size:0.78rem;font-weight:300;color:#888;margin-bottom:24px;line-height:1.6}
 .m-card .m-price{font-family:'Cormorant Garamond',serif;font-size:1.8rem;font-weight:300;color:var(--text);margin-bottom:6px}
 .m-card .m-price-note{font-size:0.75rem;font-weight:300;color:#aaa;margin-bottom:28px}
-.m-card .m-cta{display:inline-block;padding:12px 36px;border:1px solid var(--text);background:transparent;color:var(--text);font-family:'Cormorant Garamond',serif;font-size:0.78rem;letter-spacing:0.12em;text-transform:uppercase;cursor:pointer;transition:all 0.4s;text-decoration:none}
+.m-card .m-cta{display:inline-block;padding:12px 36px;border:1px solid var(--text);background:transparent;color:var(--text);font-family:'Cormorant Garamond',serif;font-size:0.78rem;letter-spacing:0.12em;text-transform:uppercase;cursor:pointer;transition:all 0.4s;text-decoration:none;margin-top:auto}
 .m-card .m-cta:hover{background:var(--text);color:var(--white)}
+.m-card.vip-card .m-price{margin-top:auto;margin-bottom:auto}
 .m-card.vip-card .m-cta{border-color:#c4a35a;color:#c4a35a}
 .m-card.vip-card .m-cta:hover{background:#c4a35a;color:var(--white)}
 /* Curriculum Section */
@@ -192,7 +193,7 @@ nav ul li a.nav-active{color:var(--accent)}
 /* Credentials */
 .credentials{max-width:900px;margin:40px auto 0;display:grid;grid-template-columns:1fr 1fr;gap:40px}
 .cert-item{text-align:center}
-.cert-item img{width:100%;max-width:420px;height:auto;object-fit:contain;background:var(--white);border:1px solid var(--border);padding:16px;filter:grayscale(20%) brightness(1.02);transition:all 0.5s ease}
+.cert-item img{width:100%;max-width:400px;height:280px;object-fit:contain;background:var(--white);border:1px solid var(--border);padding:16px;filter:grayscale(20%) brightness(1.02);transition:all 0.5s ease}
 .cert-item img:hover{filter:grayscale(0%) brightness(1.05);transform:scale(1.02)}
 @media(max-width:768px){nav{padding:0 24px}nav .inner{padding:0}nav ul{display:none}.hamburger{display:block}nav .logo img{height:28px}.hero h1{font-size:2.8rem}.about-grid,.class-details,.membership-cards{grid-template-columns:1fr}section{padding:80px 24px}.section-title,.section-title-kr,.section-title-bold{font-size:2rem}.modal{padding:40px 28px}.privacy-modal{padding:36px 24px}.terms-modal{padding:36px 24px}footer{padding:60px 24px}footer .logo-img{height:24px}.sns-icons{grid-template-columns:repeat(3,36px);gap:14px}.sns-icons a{width:36px;height:36px}.sns-icons a svg{width:16px;height:16px}.m-card{padding:36px 24px}.testimonial-grid,.credentials{grid-template-columns:1fr}}
 </style>
@@ -221,7 +222,7 @@ nav ul li a.nav-active{color:var(--accent)}
 <div class="membership-cards">
 <div class="m-card"><div class="m-tier eng">Core</div><div class="m-name">데일리 요가 클래스</div><div class="m-sub">평일 매일, ZOOM 실시간 온라인</div><div class="m-price eng">99,000<span style="font-size:0.9rem">원</span></div><div class="m-price-note">12회 이용권 (유효기간 3개월)</div><a href="#core" class="m-cta eng">Learn More</a></div>
 <div class="m-card"><div class="m-tier eng">Premium</div><div class="m-name">6주 집중수련 코스</div><div class="m-sub">소규모 그룹 (6명)</div><div class="m-price eng">3,300,000<span style="font-size:0.9rem">원</span></div><div class="m-price-note">1인 기준</div><a href="#premium" class="m-cta eng">Learn More</a></div>
-<div class="m-card vip-card"><div class="m-tier eng" style="color:#c4a35a">VIP</div><div class="m-name">12개월 밀착 VIP 1:1 코칭</div><div class="m-sub">54주 맞춤형 수업 설계</div><div class="m-price eng" style="color:#c4a35a;font-size:1rem;letter-spacing:0.12em">개별상담</div><div class="m-price-note">&nbsp;</div><a href="#vip" class="m-cta eng">Learn More</a></div>
+<div class="m-card vip-card"><div class="m-tier eng" style="color:#c4a35a">VIP</div><div class="m-name">12개월 밀착 VIP 1:1 코칭</div><div class="m-sub">54주 맞춤형 수업 설계</div><div class="m-price eng" style="color:#c4a35a;font-size:1rem;letter-spacing:0.12em">개별상담</div><a href="#vip" class="m-cta eng">Learn More</a></div>
 </div></div></section>
 
 <!-- ================ CORE MEMBERSHIP ================ -->

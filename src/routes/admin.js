@@ -42,7 +42,7 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
       const result = await pool.query(
         "SELECT u.id, u.name, u.email, u.phone, u.created_at," +
         " (SELECT COALESCE(SUM(cp.remaining_classes), 0) FROM class_passes cp WHERE cp.user_id = u.id AND cp.status = 'active') as remaining_classes," +
-        " (SELECT COUNT(*) FROM attendance a WHERE a.user_id = u.id) as total_attended" +
+        " (SELECT COALESCE(SUM(cp2.total_classes - cp2.remaining_classes), 0) FROM class_passes cp2 WHERE cp2.user_id = u.id) as total_attended" +
         " FROM users u " + whereClause +
         " ORDER BY u.created_at DESC LIMIT $" + (params.length + 1) + " OFFSET $" + (params.length + 2),
         [...params, limit, offset]
@@ -79,7 +79,7 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
         'SELECT * FROM credit_logs WHERE user_id = $1 ORDER BY created_at DESC',
         [userId]
       );
-      const totalAttended = attendanceResult.rows.length;
+      const totalAttended = passResult.rows.reduce((sum, p) => sum + (p.total_classes - p.remaining_classes), 0);
       const activePasses = passResult.rows.filter(p => p.status === 'active' && p.remaining_classes > 0);
       const totalRemaining = activePasses.reduce((sum, p) => sum + p.remaining_classes, 0);
       res.json({
@@ -1035,4 +1035,5 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
     }
   });
 };
+
 
