@@ -165,7 +165,9 @@ footer p{font-size:0.72rem;color:#999;font-weight:300}
 .membership-overview{background:var(--section-bg)}
 .core-section{background:var(--bg)}
 .premium-section{background:var(--bg)}
-.vip-section{background:var(--section-bg)}
+.premium-apply-section{background:var(--section-bg)}
+.vip-section{background:var(--bg)}
+.vip-apply-section{background:var(--section-bg)}
 @media(max-width:768px){nav{padding:0 24px}nav .inner{padding:0}nav ul{display:none}.hamburger{display:block}nav .logo img{height:28px}.hero h1{font-size:2.8rem}.about-grid,.class-details,.membership-cards{grid-template-columns:1fr}section{padding:80px 24px}.section-title,.section-title-kr,.section-title-bold{font-size:2rem}.modal{padding:40px 28px}.privacy-modal{padding:36px 24px}.terms-modal{padding:36px 24px}footer{padding:60px 24px}footer .logo-img{height:24px}.sns-icons{grid-template-columns:repeat(3,36px);gap:14px}.sns-icons a{width:36px;height:36px}.sns-icons a svg{width:16px;height:16px}.m-card{padding:36px 24px}}
 </style>
 </head>
@@ -210,9 +212,18 @@ footer p{font-size:0.72rem;color:#999;font-weight:300}
 <li>5주차 — 손목과 발목 (Wrists, Twist &amp; Ankles) 집중수련</li>
 <li>6주차 — 부위별 총 복습 집중수련</li>
 </ul></div>
-<div class="cur-badge eng">[ Enneagram × Yoga ] Certificate</div>
+<div class="cur-badge">[ 에니어그램 X 요가 ] 수료증 수여</div>
 </div>
-<div style="margin-top:50px;text-align:center"><p style="font-size:0.9rem;font-weight:300;color:#555;margin-bottom:8px">인당 <strong style="font-weight:500">3,300,000원</strong> · 1그룹 6명</p></div>
+<div class="class-details" style="margin-top:50px;max-width:900px">
+<div class="class-detail-item"><div class="label eng">Format</div><div class="value">소규모 그룹 집중수련 (6명)</div></div>
+<div class="class-detail-item"><div class="label eng">Duration</div><div class="value">6주 과정</div></div>
+<div class="class-detail-item"><div class="label eng">Certificate</div><div class="value">에니어그램 X 요가 수료증 수여</div></div>
+<div class="class-detail-item"><div class="label eng">Price</div><div class="value">인당 3,300,000원</div></div>
+</div>
+</div></section>
+
+<!-- ================ PREMIUM APPLY ================ -->
+<section class="premium-apply-section" id="premium-apply"><div class="section-inner" style="text-align:center"><p class="section-label eng">Premium Waitlist</p><h2 class="section-title-bold">6주 집중수련 신청</h2><p class="section-text" style="text-align:center;max-width:500px;margin:-30px auto 50px">대기자 등록 후 개별 안내드립니다.</p>
 <div class="waitlist-form" id="premiumWaitlistForm"><div class="form-group"><label class="eng">Name</label><input type="text" id="premiumName" placeholder="이름을 입력해주세요" required></div><div class="form-group"><label class="eng">Phone</label><input type="tel" id="premiumPhone" placeholder="연락처를 입력해주세요" required></div><div class="form-group"><label class="eng">Email</label><input type="email" id="premiumEmail" placeholder="이메일을 입력해주세요" required></div><div style="text-align:center"><button type="button" class="submit-btn" onclick="submitWaitlist('premium')">Join Waitlist</button></div></div>
 <div class="waitlist-success" id="premiumSuccess"><div class="check">✓</div><p>대기자 명단에 등록되었습니다.<br>확인 후 개별 연락드리겠습니다.</p></div>
 </div></section>
@@ -249,6 +260,10 @@ footer p{font-size:0.72rem;color:#999;font-weight:300}
 </ul></div>
 </div>
 <div style="margin-top:50px;text-align:center"><p style="font-family:'Cormorant Garamond',serif;font-size:1.1rem;font-weight:300;color:#c4a35a;letter-spacing:0.15em">By Invitation</p></div>
+</div></section>
+
+<!-- ================ VIP APPLY ================ -->
+<section class="vip-apply-section" id="vip-apply"><div class="section-inner" style="text-align:center"><p class="section-label eng" style="color:#c4a35a">VIP Waitlist</p><h2 class="section-title-bold">VIP 1:1 코칭 신청</h2><p class="section-text" style="text-align:center;max-width:500px;margin:-30px auto 50px">대기자 등록 후 개별 안내드립니다.</p>
 <div class="waitlist-form" id="vipWaitlistForm"><div class="form-group"><label class="eng">Name</label><input type="text" id="vipName" placeholder="이름을 입력해주세요" required></div><div class="form-group"><label class="eng">Phone</label><input type="tel" id="vipPhone" placeholder="연락처를 입력해주세요" required></div><div class="form-group"><label class="eng">Email</label><input type="email" id="vipEmail" placeholder="이메일을 입력해주세요" required></div><div style="text-align:center"><button type="button" class="submit-btn" onclick="submitWaitlist('vip')" style="border-color:#c4a35a;color:#c4a35a">Join Waitlist</button></div></div>
 <div class="waitlist-success" id="vipSuccess"><div class="check" style="color:#c4a35a">✓</div><p>대기자 명단에 등록되었습니다.<br>확인 후 개별 연락드리겠습니다.</p></div>
 </div></section>
@@ -278,7 +293,7 @@ footer p{font-size:0.72rem;color:#999;font-weight:300}
 <div class="terms-supplement"><h4>부칙</h4><p>이 약관은 2025년 2월 12일부터 시행합니다.</p></div>
 </div></div>
 <footer>
-<p class="sns-tagline eng">Official account, personally curated.</p>
+<p class="sns-tagline eng">Official account,<br>personally curated.</p>
 <div class="sns-icons">
 <a href="https://www.youtube.com/@junseonghwang" target="_blank" rel="noopener" title="YouTube"><svg viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg></a>
 <a href="https://www.instagram.com/junseong._.hwang" target="_blank" rel="noopener" title="Instagram"><svg viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881z"/></svg></a>
