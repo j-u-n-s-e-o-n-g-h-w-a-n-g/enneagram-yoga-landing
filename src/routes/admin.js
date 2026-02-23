@@ -41,7 +41,7 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
 
       const result = await pool.query(
         "SELECT u.id, u.name, u.email, u.phone, u.created_at," +
-        " (SELECT COALESCE(SUM(cp.remaining_classes), 0) FROM class_passes cp WHERE cp.user_id = u.id AND cp.status = 'active') as remaining_classes," +
+        " (SELECT COALESCE(SUM(cp.remaining_classes), 0) FROM class_passes cp WHERE cp.user_id = u.id AND cp.status = 'active' AND (cp.expires_at IS NULL OR cp.expires_at > NOW())) as remaining_classes," +
         " (SELECT COALESCE(SUM(cp2.total_classes - cp2.remaining_classes), 0) FROM class_passes cp2 WHERE cp2.user_id = u.id) as total_attended" +
         " FROM users u " + whereClause +
         " ORDER BY u.created_at DESC LIMIT $" + (params.length + 1) + " OFFSET $" + (params.length + 2),
@@ -80,7 +80,8 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
         [userId]
       );
       const totalAttended = passResult.rows.reduce((sum, p) => sum + (p.total_classes - p.remaining_classes), 0);
-      const activePasses = passResult.rows.filter(p => p.status === 'active' && p.remaining_classes > 0);
+      const now = new Date();
+      const activePasses = passResult.rows.filter(p => p.status === 'active' && p.remaining_classes > 0 && (!p.expires_at || new Date(p.expires_at) > now));
       const totalRemaining = activePasses.reduce((sum, p) => sum + p.remaining_classes, 0);
       res.json({
         user: userResult.rows[0],
@@ -373,9 +374,11 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
   app.get('/api/admin/stats', requireDB, requireAdmin, async (req, res) => {
     const pool = getPool();
     try {
+      // 만료된 이용권 자동 상태 전환 (active → expired)
+      await pool.query("UPDATE class_passes SET status = 'expired' WHERE status = 'active' AND expires_at IS NOT NULL AND expires_at < NOW()");
       const totalMembers = await pool.query("SELECT COUNT(*) FROM users WHERE role = 'member' AND deleted_at IS NULL");
       const pendingPayments = await pool.query("SELECT COUNT(*) FROM payments WHERE status = 'pending' AND deleted_at IS NULL");
-      const activePasses = await pool.query("SELECT COUNT(*) FROM class_passes WHERE status = 'active' AND remaining_classes > 0");
+      const activePasses = await pool.query("SELECT COUNT(*) FROM class_passes WHERE status = 'active' AND remaining_classes > 0 AND (expires_at IS NULL OR expires_at > NOW())");
       const todayAttendance = await pool.query("SELECT COUNT(*) FROM attendance WHERE attended_at::date = CURRENT_DATE");
       const pendingApps = await pool.query("SELECT COUNT(*) FROM applications WHERE status = 'pending' AND deleted_at IS NULL");
       res.json({

@@ -614,6 +614,7 @@ function renderPasses(passes) {
     if (p.status === 'active') { badgeClass = 'badge-active'; statusLabel = '활성'; }
     else if (p.status === 'used') { badgeClass = 'badge-used'; statusLabel = '소진'; }
     else if (p.status === 'expired') { badgeClass = 'badge-expired'; statusLabel = '만료'; }
+    else if (p.status === 'cancelled') { badgeClass = 'badge-expired'; statusLabel = '취소'; }
     html += '<tr><td>' + p.id + '</td><td>' + p.total_classes + '회</td><td><strong>' + p.remaining_classes + '회</strong></td><td><span class="badge ' + badgeClass + '">' + statusLabel + '</span></td><td>' + purchased + '</td><td>' + expires + '</td></tr>';
   });
   html += '</tbody></table>';
@@ -625,12 +626,14 @@ function renderCreditLogs(logs) {
     document.getElementById('detailCreditLogs').innerHTML = '<div class="empty-state">추가 이력이 없습니다</div>';
     return;
   }
-  let html = '<table><thead><tr><th>날짜</th><th>추가 횟수</th><th>이용권 ID</th><th>메모</th></tr></thead><tbody>';
+  let html = '<table><thead><tr><th>날짜</th><th>변경 횟수</th><th>이용권 ID</th><th>메모</th></tr></thead><tbody>';
   logs.forEach(l => {
     const dt = new Date(l.created_at);
     const date = dt.toLocaleDateString('ko-KR');
     const time = dt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
-    html += '<tr><td>' + date + ' ' + time + '</td><td><strong>+' + l.credits + '회</strong></td><td>' + (l.class_pass_id || '-') + '</td><td style="font-size:0.76rem;color:#888">' + escapeHtml(l.note || '-') + '</td></tr>';
+    const creditColor = l.credits > 0 ? '#2e7d32' : '#c62828';
+    const creditText = (l.credits > 0 ? '+' : '') + l.credits + '회';
+    html += '<tr><td>' + date + ' ' + time + '</td><td><strong style="color:' + creditColor + '">' + creditText + '</strong></td><td>' + (l.class_pass_id || '-') + '</td><td style="font-size:0.76rem;color:#888">' + escapeHtml(l.note || '-') + '</td></tr>';
   });
   html += '</tbody></table>';
   document.getElementById('detailCreditLogs').innerHTML = html;
@@ -1184,7 +1187,7 @@ async function loadAttendanceHistory(page) {
       var time = dt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
       var passInfo = a.pass_status ? (a.pass_remaining + '/' + a.total_classes + '회') : '-';
       var passBadge = a.pass_status === 'active' ? 'badge-active' : a.pass_status === 'used' ? 'badge-used' : 'badge-expired';
-      var passLabel = a.pass_status === 'active' ? '활성' : a.pass_status === 'used' ? '소진' : (a.pass_status || '-');
+      var passLabel = a.pass_status === 'active' ? '활성' : a.pass_status === 'used' ? '소진' : a.pass_status === 'expired' ? '만료' : a.pass_status === 'cancelled' ? '취소' : (a.pass_status || '-');
       var note = a.note || '';
       if (a.zoom_meeting_uuid) note = (note ? note + ' ' : '') + '🎥 Zoom';
 
