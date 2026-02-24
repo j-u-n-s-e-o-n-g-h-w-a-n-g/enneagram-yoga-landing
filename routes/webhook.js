@@ -747,9 +747,11 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
     const pool = getPool();
     try {
       const targetDate = req.query.date || null; // optional: YYYY-MM-DD format
+      // attended_at is TIMESTAMP WITHOUT TZ storing UTC values
+      // Must use: AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul' to convert properly
       const dateCondition = targetDate
-        ? `(a.attended_at AT TIME ZONE 'Asia/Seoul')::date = $1::date`
-        : `(a.attended_at AT TIME ZONE 'Asia/Seoul')::date = (NOW() AT TIME ZONE 'Asia/Seoul')::date`;
+        ? `(a.attended_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul')::date = $1::date`
+        : `(a.attended_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul')::date = (NOW() AT TIME ZONE 'Asia/Seoul')::date`;
       const params = targetDate ? [targetDate] : [];
 
       const result = await pool.query(`
@@ -758,7 +760,7 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
           u.name,
           u.email,
           a.zoom_meeting_uuid,
-          EXTRACT(HOUR FROM a.attended_at AT TIME ZONE 'Asia/Seoul') as hour_kst
+          EXTRACT(HOUR FROM a.attended_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul') as hour_kst
         FROM attendance a
         JOIN users u ON u.id = a.user_id
         WHERE ${dateCondition}
