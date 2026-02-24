@@ -741,6 +741,56 @@ module.exports = function(app, { getPool, isDBReady, CONFIG, middleware, service
     }
   });
 
+  // ===================== WEBHOOK: daily-attendance-summary =====================
+
+  app.get('/api/webhook/daily-attendance-summary', requireDB, requireApiKey, async (req, res) => {
+    const pool = getPool();
+    try {
+      const targetDate = req.query.date || null; // optional: YYYY-MM-DD format
+      const dateCondition = targetDate
+        ? `(a.attended_at AT TIME ZONE 'Asia/Seoul')::date = $1::date`
+        : `(a.attended_at AT TIME ZONE 'Asia/Seoul')::date = (NOW() AT TIME ZONE 'Asia/Seoul')::date`;
+      const params = targetDate ? [targetDate] : [];
+
+      const result = await pool.query(`
+        SELECT
+          a.attended_at,
+          u.name,
+          u.email,
+          a.zoom_meeting_uuid,
+          EXTRACT(HOUR FROM a.attended_at AT TIME ZONE 'Asia/Seoul') as hour_kst
+        FROM attendance a
+        JOIN users u ON u.id = a.user_id
+        WHERE ${dateCondition}
+          AND u.role = 'member'
+        ORDER BY a.attended_at ASC
+      `, params);
+
+      const morning = result.rows.filter(r => r.hour_kst < 15);
+      const evening = result.rows.filter(r => r.hour_kst >= 15);
+
+      const kstNow = new Date(Date.now() + 9 * 60 * 60 * 1000);
+      const dateStr = targetDate || kstNow.toISOString().slice(0, 10);
+
+      res.json({
+        success: true,
+        date: dateStr,
+        morning: {
+          count: morning.length,
+          attendees: morning.map(r => ({ name: r.name, email: r.email, time: r.attended_at }))
+        },
+        evening: {
+          count: evening.length,
+          attendees: evening.map(r => ({ name: r.name, email: r.email, time: r.attended_at }))
+        },
+        total: result.rows.length
+      });
+    } catch (err) {
+      console.error('Daily attendance summary error:', err);
+      res.status(500).json({ error: '서버 오류' });
+    }
+  });
+
   // ===================== WEBHOOK: zoom-token (프록시) =====================
 
   app.get('/api/webhook/zoom-token', requireApiKey, async (req, res) => {
