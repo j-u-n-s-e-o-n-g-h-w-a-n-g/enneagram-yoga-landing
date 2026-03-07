@@ -17,9 +17,25 @@
 <meta name="twitter:title" content="Junseong Hwang — ENNEAGRAM × YOGA">
 <meta name="twitter:description" content="모든 것에서 아름다움을 발견할 수 있도록">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Person",
+  "name": "Junseong Hwang",
+  "alternateName": "황준성",
+  "url": "https://junseonghwang.com",
+  "sameAs": [
+    "https://www.linkedin.com/in/junseonghwang",
+    "https://brunch.co.kr/@junseonghwang",
+    "https://www.instagram.com/junseong._.hwang"
+  ],
+  "jobTitle": "Enneagram & Yoga Practitioner",
+  "knowsAbout": ["Enneagram", "Yoga"]
+}
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Noto+Serif+KR:wght@200;300;400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400&family=Noto+Serif+KR:wght@200;300;400&display=swap" rel="stylesheet">
 <style>
 /* ===== Reset & Base ===== */
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
@@ -368,13 +384,6 @@ section {
   border-color: var(--text);
 }
 
-.contact-note {
-  font-size: 0.88rem;
-  font-weight: 200;
-  color: var(--text-light);
-  line-height: 1.8;
-}
-
 /* ===== Footer ===== */
 footer {
   padding: 60px 24px;
@@ -440,6 +449,23 @@ footer {
 .fade-in.visible {
   opacity: 1;
   transform: translateY(0);
+}
+
+/* ===== Reduced Motion ===== */
+@media (prefers-reduced-motion: reduce) {
+  .fade-in {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .scroll-line::after {
+    animation: none;
+  }
+
+  html {
+    scroll-behavior: auto;
+  }
 }
 
 /* ===== Responsive ===== */
@@ -553,7 +579,7 @@ footer {
 
 <!-- Hero -->
 <section class="hero">
-  <p class="hero-sub eng">ENNEAGRAM &times; YOGA</p>
+  <h1 class="hero-sub eng">ENNEAGRAM &times; YOGA</h1>
   <p class="hero-title">모든 것에서 아름다움을<br>발견할 수 있도록 수련합니다.</p>
   <div class="scroll-indicator">
     <div class="scroll-line"></div>
